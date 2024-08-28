@@ -1,5 +1,5 @@
 ---
-
+import Game from "../Game.svelte"
 ---
 
 <html lang="en">
@@ -10,7 +10,7 @@
 		<meta name="generator" content={Astro.generator} />
 		<title>Astro</title>
 	</head>
-	<body>
-		<h1>Astro</h1>
+	<body class="w-full p-4">
+		<Game client:load />
 	</body>
 </html>
