@@ -6,7 +6,11 @@ use axum::{
     routing::get,
     Router,
 };
+use base64::prelude::BASE64_STANDARD_NO_PAD;
+use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
+use ed25519_dalek::SigningKey;
 use futures::{SinkExt, StreamExt};
+use rand_core::OsRng;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::Mutex;
 use uuid::Uuid;
@@ -14,6 +18,8 @@ use uuid::Uuid;
 struct User {
     partner_id: Option<Uuid>,
     sender: tokio::sync::mpsc::UnboundedSender<Message>,
+    pub_key: String,
+    priv_key: String,
 }
 #[derive(Clone)]
 struct AppState {
@@ -47,12 +53,18 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     let (mut sender, mut receiver) = socket.split();
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
+    let mut csprng = OsRng;
+    let signing_key: SigningKey = SigningKey::generate(&mut csprng);
+
     let user_id = Uuid::new_v4();
     let user = User {
         partner_id: None,
         sender: tx.clone(),
+        priv_key: STANDARD_NO_PAD.encode(signing_key.to_bytes()),
+        pub_key: STANDARD_NO_PAD.encode(signing_key.verifying_key().to_bytes()),
     };
-
+    let pub_key = user.pub_key.clone();
+    let priv_key = user.priv_key.clone();
     state.all_users.lock().await.insert(user_id, user);
 
     tokio::spawn(async move {
@@ -75,13 +87,23 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                             partner_user
                                 .sender
                                 .send(Message::Text(
-                                    serde_json::json!({"type": "paired", "initiator": false})
-                                        .to_string(),
+                                    serde_json::json!({
+                                        "type": "paired",
+                                        "public_key": partner_user.pub_key,
+                                        "private_key": partner_user.priv_key,
+                                        "partner_key": pub_key,
+                                        "initiator": false
+                                    })
+                                    .to_string(),
                                 ))
                                 .unwrap();
                             tx.send(Message::Text(
-                                serde_json::json!({"type": "paired", "initiator": true})
-                                    .to_string(),
+                                serde_json::json!({"type": "paired",
+                                 "public_key": pub_key,
+                                 "private_key": priv_key,
+                                 "partner_key": partner_user.pub_key,
+                                 "initiator": true})
+                                .to_string(),
                             ))
                             .unwrap();
                             all_users.get_mut(&partner_user_id).unwrap().partner_id = Some(user_id);

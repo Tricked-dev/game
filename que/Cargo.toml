@@ -5,9 +5,13 @@ edition = "2021"
 
 [dependencies]
 axum = { version = "0.7.5", features = ["ws"] }
+base64 = "0.22.1"
 dashmap = { version = "6.0.1", features = ["serde"] }
+ed25519 = "2.2.3"
+ed25519-dalek = { version = "2.1.1", features = ["rand_core"] }
 futures = "0.3.30"
 http = "1.1.0"
+rand_core = "0.6.4"
 serde = { version = "1.0.209", features = ["derive"] }
 serde_json = "1.0.127"
 socketioxide = "0.14.1"
