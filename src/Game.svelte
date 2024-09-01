@@ -73,6 +73,7 @@
   // startChatButton.addEventListener("click", startChat);
   // sendMessageButton.addEventListener("click", sendMessage);
 
+  console.log("Pairing");
   function startChat() {
     ws = new WebSocket("ws://localhost:8080");
 
@@ -99,6 +100,29 @@
             true,
             ["sign", "verify"]
           )) as CryptoKeyPair;
+          console.log("Pairing");
+          console.log("Pairing");
+          try {
+            await crypto.subtle.exportKey("raw", diceholder.privateKey);
+          } catch (e) {
+            console.log("Failed exporting key");
+            console.log(e);
+          }
+          console.log(
+            arrayBufferToBase64(
+              await crypto.subtle.exportKey("raw", diceholder.privateKey)
+            )
+          );
+          console.log(
+            arrayBufferToBase64(
+              await crypto.subtle.exportKey("raw", diceholder.privateKey)
+            )
+          );
+          console.log(
+            arrayBufferToBase64(
+              await crypto.subtle.exportKey("raw", diceholder.privateKey)
+            )
+          );
           let signature = await crypto.subtle.sign(
             keyType,
             diceholder.privateKey,
@@ -112,8 +136,14 @@
             seed: seed,
             signature: arrayBufferToBase64(signature),
           };
-          // startChatButton.style.display = "none";
-          // chatArea.style.display = "block";
+
+          const myPrivate = await crypto.subtle.importKey(
+            "raw",
+            base64ToArrayBuffer(message.private_key),
+            { name: "Ed25519" },
+            true,
+            ["sign"]
+          );
 
           const myPublic = await crypto.subtle.importKey(
             "raw",
@@ -122,13 +152,7 @@
             true,
             ["verify"]
           );
-          const myPrivate = await crypto.subtle.importKey(
-            "raw",
-            base64ToArrayBuffer(message.private_key),
-            { name: "Ed25519" },
-            true,
-            ["sign"]
-          );
+
           const otherPublic = await crypto.subtle.importKey(
             "raw",
             base64ToArrayBuffer(message.partner_key),
@@ -139,8 +163,8 @@
 
           game = new Game(
             {
-              privateKey: myPrivate,
               publicKey: myPublic,
+              privateKey: myPrivate,
             },
             {
               publicKey: otherPublic,
