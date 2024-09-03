@@ -21,13 +21,34 @@ struct ServerGameInfo {
     signature: Vec<u8>,
 }
 
-struct Game {
-    history: Vec<HistoryItem>,
+pub struct Dice {
+    next_dice: u8,
     rng: StdRng,
+}
+
+impl Dice {
+    pub fn new(seed: u64) -> Self {
+        let mut rng = StdRng::seed_from_u64(seed);
+        let next_dice = (rng.next_u32() % 6) as u8 + 1;
+        Dice { next_dice, rng }
+    }
+
+    pub fn roll(&mut self) -> usize {
+        let num = self.next_dice;
+        self.next_dice = (self.rng.next_u32() % 6) as u8 + 1;
+        num as usize
+    }
+    pub fn peek(&self) -> usize {
+        self.next_dice as usize
+    }
+}
+
+pub struct Game {
+    history: Vec<HistoryItem>,
     deck: Vec<u32>,
     other_deck: Vec<u32>,
     seq: u32,
-    next_dice: u32,
+    dice: Dice,
     my_keys: SigningKey,
     other_keys: VerifyingKey,
     deck_size: (usize, usize),
@@ -43,18 +64,16 @@ impl Game {
         info: ServerGameInfo,
         id: u32,
     ) -> Self {
-        let mut rng = StdRng::seed_from_u64(info.seed);
         let deck = vec![0; deck_size.0 * deck_size.1];
         let other_deck = vec![0; deck_size.0 * deck_size.1];
-        let next_dice = rng.next_u32();
+        let dice = Dice::new(info.seed);
 
         Game {
             history: Vec::new(),
-            rng,
             deck,
             other_deck,
             seq: 0,
-            next_dice,
+            dice,
             my_keys,
             other_keys,
             deck_size,
@@ -71,13 +90,13 @@ impl Game {
         vec![0; self.deck_size.0 * self.deck_size.1]
     }
 
-    pub async fn add_opponent_move(&mut self, data: HistoryItem) {
+    pub fn add_opponent_move(&mut self, data: HistoryItem) {
         self.seq += 1;
         self.history.push(data.clone());
-        self.play_move(data).await;
+        self.play_move(data);
     }
 
-    pub async fn place(&mut self, x: usize) -> HistoryItem {
+    pub fn place(&mut self, x: usize) -> HistoryItem {
         self.seq += 1;
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -96,11 +115,11 @@ impl Game {
         signed_item.signature = signature.to_bytes();
 
         self.history.push(signed_item.clone());
-        self.play_move(signed_item.clone()).await;
+        self.play_move(signed_item.clone());
         signed_item
     }
 
-    pub async fn play_move(&mut self, item: HistoryItem) {
+    pub fn play_move(&mut self, item: HistoryItem) {
         let player = self.seq % 2;
         let me_first = self.info.starter == self.id;
 
@@ -142,7 +161,7 @@ impl Game {
             );
         }
 
-        let num = self.next_dice;
+        let num = self.dice.roll() as u32;
         deck[pos] = num;
 
         for i in 0..self.deck_size.0 {
@@ -152,7 +171,6 @@ impl Game {
                 break;
             }
         }
-        self.next_dice = self.rng.next_u32();
     }
 
     pub fn get_board_data(&self) -> BoardData {
@@ -168,31 +186,34 @@ impl Game {
             history: self.history.clone(),
             seq: self.seq,
             deck_size: self.deck_size,
-            next_dice: self.next_dice,
+            next_dice: self.dice.peek() as u8,
         }
     }
 }
 
+#[derive(Clone, Debug)]
 struct BoardData {
     points: Points,
     decks: Decks,
     history: Vec<HistoryItem>,
     seq: u32,
     deck_size: (usize, usize),
-    next_dice: u32,
+    next_dice: u8,
 }
 
+#[derive(Clone, Debug)]
 struct Points {
     me: Vec<u32>,
     other: Vec<u32>,
 }
 
+#[derive(Clone, Debug)]
 struct Decks {
     me: Vec<u32>,
     other: Vec<u32>,
 }
 
-fn calculate_knucklebones_points(board: &[u32], height: usize) -> Vec<u32> {
+pub(crate) fn calculate_knucklebones_points(board: &[u32], height: usize) -> Vec<u32> {
     let multiplication_table = [
         [1, 4, 9],
         [2, 8, 18],
@@ -214,6 +235,9 @@ fn calculate_knucklebones_points(board: &[u32], height: usize) -> Vec<u32> {
         let occ = count_occurrences(&column);
 
         for (&key, &value) in occ.iter() {
+            if key == 0 {
+                continue;
+            }
             total += multiplication_table[key as usize - 1][value as usize - 1];
         }
 
@@ -223,10 +247,80 @@ fn calculate_knucklebones_points(board: &[u32], height: usize) -> Vec<u32> {
     results
 }
 
-fn count_occurrences(arr: &[u32]) -> std::collections::HashMap<u32, u32> {
+pub(crate) fn count_occurrences(arr: &[u32]) -> std::collections::HashMap<u32, u32> {
     let mut map = std::collections::HashMap::new();
     for &item in arr {
         *map.entry(item).or_insert(0) += 1;
     }
     map
+}
+
+#[cfg(test)]
+mod tests {
+    use rand_core::OsRng;
+
+    use super::*;
+
+    #[test]
+    fn test_count_occurrences() {
+        let arr = vec![1, 2, 3, 4, 1, 2, 3, 4];
+        let map = count_occurrences(&arr);
+        assert_eq!(map[&1], 2);
+        assert_eq!(map[&2], 2);
+        assert_eq!(map[&3], 2);
+        assert_eq!(map[&4], 2);
+    }
+    // Test only 3x3 since thats what we do in the game
+    #[test]
+    fn test_knucklebones() {
+        let points = calculate_knucklebones_points(&[1, 0, 0, 0, 0, 0, 0, 0, 0], 3);
+        assert_eq!(points, vec![1, 0, 0]);
+        let points = calculate_knucklebones_points(&[6, 1, 2, 6, 0, 0, 6, 0, 0], 3);
+        assert_eq!(points, vec![54, 1, 2]);
+        let points = calculate_knucklebones_points(&[0, 0, 0, 0, 0, 0, 0, 0, 0], 3);
+        assert_eq!(points, vec![0, 0, 0]);
+    }
+    #[test]
+    fn test_game() {
+        let mut csprng = OsRng;
+        let my_keys = SigningKey::generate(&mut csprng);
+        let other_keys = SigningKey::generate(&mut csprng);
+        let deck_size = (3, 3);
+        let info = ServerGameInfo {
+            seed: 0,
+            starter: 0,
+            signature: vec![],
+        };
+        let mut game = Game::new(
+            my_keys.clone(),
+            other_keys.verifying_key(),
+            deck_size,
+            info,
+            0,
+        );
+        let info = game.get_board_data();
+        assert_eq!(info.next_dice, 2);
+        assert_eq!(info.deck_size, (3, 3));
+        assert_eq!(info.seq, 0);
+        assert_eq!(info.history.len(), 0);
+        let mv = game.place(2);
+        let item = {
+            let deck_size = (3, 3);
+            let info = ServerGameInfo {
+                seed: 0,
+                starter: 0,
+                signature: vec![],
+            };
+            let mut game = Game::new(other_keys, my_keys.verifying_key(), deck_size, info, 1);
+            game.add_opponent_move(mv);
+            game.place(1)
+        };
+
+        game.add_opponent_move(item);
+
+        let info = game.get_board_data();
+        assert_eq!(info.points.me, vec![0, 0, 2]);
+        assert_eq!(info.points.other, vec![0, 3, 0]);
+        dbg!(info);
+    }
 }
