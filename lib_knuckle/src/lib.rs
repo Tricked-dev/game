@@ -1,24 +1,28 @@
-use ed25519::signature::{Keypair, SignerMut};
+use base64::prelude::BASE64_STANDARD_NO_PAD;
+use base64::Engine;
+use ed25519::signature::SignerMut;
 use ed25519::Signature;
 use ed25519_dalek::Verifier;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::RngCore;
 use rand::{rngs::StdRng, SeedableRng};
+use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
+use wasm_bindgen::prelude::wasm_bindgen;
+use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsValue;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct HistoryItem {
     seq: u32,
     now: u64,
     x: usize,
-    signature: [u8; 64],
+    signature: Vec<u8>,
 }
 
 #[derive(Debug)]
 pub struct ServerGameInfo {
     seed: u64,
-    #[allow(unused)] // used by server to validate after
-    signature: Vec<u8>,
     starting: bool,
 }
 
@@ -44,6 +48,7 @@ impl Dice {
     }
 }
 
+#[wasm_bindgen]
 pub struct Game {
     history: Vec<HistoryItem>,
     deck: Vec<u32>,
@@ -104,13 +109,13 @@ impl Game {
             seq: self.seq,
             now,
             x,
-            signature: [0; 64],
+            signature: vec![],
         };
 
         let to_sign = Game::encode_history_item(&data);
         let signature = self.my_keys.sign(&to_sign);
         let mut signed_item = data.clone();
-        signed_item.signature = signature.to_bytes();
+        signed_item.signature = signature.to_bytes().to_vec();
 
         self.history.push(signed_item.clone());
         self.play_move(signed_item.clone());
@@ -133,7 +138,7 @@ impl Game {
             };
 
         let to_verify = Game::encode_history_item(&item);
-        let signature = Signature::from_bytes(&item.signature);
+        let signature = Signature::from_bytes(&item.signature.clone().try_into().unwrap());
 
         public_key
             .verify(&to_verify, &signature)
@@ -189,7 +194,76 @@ impl Game {
     }
 }
 
-#[derive(Clone, Debug)]
+#[wasm_bindgen]
+impl Game {
+    #[wasm_bindgen(constructor)]
+    pub fn w_new(
+        my_key_pub: String,
+        my_key_priv: String,
+        other_key_pub: String,
+        deck_x: usize,
+        deck_y: usize,
+        starting: bool,
+        seed: u64,
+    ) -> Self {
+        let my_keys = SigningKey::from_bytes(
+            &BASE64_STANDARD_NO_PAD
+                .decode(my_key_priv)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        );
+
+        assert_eq!(
+            my_keys.verifying_key(),
+            VerifyingKey::from_bytes(
+                &BASE64_STANDARD_NO_PAD
+                    .decode(my_key_pub)
+                    .unwrap()
+                    .try_into()
+                    .unwrap()
+            )
+            .unwrap()
+        );
+
+        let other_keys = VerifyingKey::from_bytes(
+            &BASE64_STANDARD_NO_PAD
+                .decode(other_key_pub)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        )
+        .unwrap();
+
+        Self {
+            history: Vec::new(),
+            deck: Self::create_deck((deck_x, deck_y)),
+            other_deck: Self::create_deck((deck_x, deck_y)),
+            seq: 0,
+            dice: Dice::new(seed),
+            my_keys,
+            other_keys,
+            deck_size: (deck_x, deck_y),
+            info: ServerGameInfo { seed, starting },
+        }
+    }
+
+    pub fn w_add_opponent_move(&mut self, data: Vec<u8>) {
+        let item: HistoryItem = bincode::deserialize(&data).unwrap();
+
+        self.add_opponent_move(item);
+    }
+    pub fn w_place(&mut self, x: usize) -> Vec<u8> {
+        let item = self.place(x);
+        bincode::serialize(&item).unwrap()
+    }
+
+    pub fn w_get_board_data(&self) -> JsValue {
+        serde_wasm_bindgen::to_value(&self.get_board_data()).unwrap()
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct BoardData {
     points: Points,
     decks: Decks,
@@ -199,13 +273,13 @@ pub struct BoardData {
     next_dice: u8,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Points {
     me: Vec<u32>,
     other: Vec<u32>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Decks {
     me: Vec<u32>,
     other: Vec<u32>,
@@ -303,7 +377,6 @@ mod tests {
         let info = ServerGameInfo {
             seed: 0,
             starting: true,
-            signature: vec![],
         };
         let mut game = Game::new(my_keys.clone(), other_keys.verifying_key(), deck_size, info);
         let info = game.get_board_data();
@@ -317,7 +390,6 @@ mod tests {
             let info = ServerGameInfo {
                 seed: 0,
                 starting: false,
-                signature: vec![],
             };
             let mut game = Game::new(other_keys, my_keys.verifying_key(), deck_size, info);
             game.add_opponent_move(mv);
@@ -333,6 +405,21 @@ mod tests {
 
         game.place(0);
         let info = game.get_board_data();
-        assert_eq!(info.points.me[0], next.into());
+        assert_eq!(info.points.me[0], next as u32);
     }
+}
+
+#[wasm_bindgen]
+extern "C" {
+    fn alert(s: &str);
+}
+
+#[wasm_bindgen]
+pub fn greet(name: &str) {
+    alert(&format!("Hello, {}!", name));
+}
+
+#[wasm_bindgen]
+pub fn add(a: u32, b: u32) -> u32 {
+    a + b
 }
