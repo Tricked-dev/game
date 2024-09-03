@@ -5,7 +5,7 @@ import {
 } from "./util.ts";
 
 import { Game } from "./libKnuckleBones.ts";
-import { sfc32 } from "./rng.ts";
+import { xorshift } from "./rng.ts";
 
 const keyType = "Ed25519";
 

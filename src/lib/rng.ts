@@ -1,4 +1,4 @@
-export function sfc32(seed: number) {
+export function xorshift(seed: number) {
   let state0 = seed;
   let state1 = ~seed; // Complementary seed for the second state
 

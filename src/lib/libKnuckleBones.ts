@@ -1,10 +1,6 @@
-import {
-  arrayBufferToBase64,
-  base64ToArrayBuffer,
-  shiftZerosDown,
-} from "./util.ts";
+import { arrayBufferToBase64, base64ToArrayBuffer } from "./util.ts";
 
-import { sfc32 } from "./rng.ts";
+import { xorshift } from "./rng.ts";
 
 type HistoryItem = {
   seq: number;
@@ -24,7 +20,7 @@ const keyType = "Ed25519";
 export class Game {
   private history: HistoryItem[] = [];
 
-  private rng: ReturnType<typeof sfc32>;
+  private rng: ReturnType<typeof xorshift>;
 
   private deck: number[];
   private otherDeck: number[];
@@ -41,14 +37,13 @@ export class Game {
     private info: ServerGameInfo,
     private id: number
   ) {
-    this.rng = sfc32(info.seed);
+    this.rng = xorshift(info.seed);
     this.deck = this.createDeck();
     this.otherDeck = this.createDeck();
     this.nextDice = this.rng();
   }
 
   private static encodeHistoryItem(item: Omit<HistoryItem, "signature">) {
-    //TODO cache the textencoder
     return new TextEncoder().encode(`${item.seq}:${item.now}:${item.x}`);
   }
 
@@ -111,7 +106,6 @@ export class Game {
       toVerify
     );
     if (!result) {
-      console.log("Invalid signature");
       throw new Error("Invalid signature");
     }
 
@@ -139,10 +133,6 @@ export class Game {
         break;
       }
     }
-
-    // this.deck = shiftZerosDown(deck, this.deckSize.width);
-    // this.otherDeck = shiftZerosDown(otherDeck, this.deckSize.width);
-
     this.nextDice = this.rng();
   }
 
@@ -165,44 +155,6 @@ export class Game {
       nextDice: this.nextDice,
     };
   }
-
-  public debugPrint() {
-    console.log("");
-    console.log("");
-    console.log(
-      " ",
-      splitarray(this.deck, this.deckSize.width)
-        .map((x) => x.join(" "))
-        .join("\n  ")
-    );
-    console.log(
-      "-",
-      calculateKnucklebonesPoints(this.deck, this.deckSize.height).join(" ")
-    );
-    console.log("----");
-    console.log(
-      " ",
-      splitarray(this.otherDeck, this.deckSize.width)
-        .map((x) => x.join(" "))
-        .join("\n  ")
-    );
-    console.log(
-      "-",
-      calculateKnucklebonesPoints(this.otherDeck, this.deckSize.height).join(
-        " "
-      )
-    );
-  }
-}
-
-function splitarray(input: any[], spacing: number) {
-  const output = [];
-
-  for (let i = 0; i < input.length; i += spacing) {
-    output.push(input.slice(i, i + spacing));
-  }
-
-  return output;
 }
 
 function calculateKnucklebonesPoints(board: number[], height: number) {
