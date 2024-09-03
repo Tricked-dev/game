@@ -1,5 +1,6 @@
-use ed25519::signature::Keypair;
+use ed25519::signature::{Keypair, SignerMut};
 use ed25519::Signature;
+use ed25519_dalek::Verifier;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::RngCore;
 use rand::{rngs::StdRng, SeedableRng};
@@ -10,7 +11,7 @@ struct HistoryItem {
     seq: u32,
     now: u64,
     x: usize,
-    signature: Vec<u8>,
+    signature: [u8; 64],
 }
 
 #[derive(Debug)]
@@ -86,32 +87,36 @@ impl Game {
             seq: self.seq,
             now,
             x,
-            signature: Vec::new(),
+            signature: [0; 64],
         };
 
         let to_sign = Game::encode_history_item(&data);
         let signature = self.my_keys.sign(&to_sign);
         let mut signed_item = data.clone();
-        signed_item.signature = signature.to_bytes().to_vec();
+        signed_item.signature = signature.to_bytes();
 
         self.history.push(signed_item.clone());
         self.play_move(signed_item.clone()).await;
         signed_item
     }
 
-    async fn play_move(&mut self, item: HistoryItem) {
+    pub async fn play_move(&mut self, item: HistoryItem) {
         let player = self.seq % 2;
         let me_first = self.info.starter == self.id;
 
         let (public_key, deck, other_deck) =
             if (me_first && player == 1) || (!me_first && player == 0) {
-                (&self.my_keys.public, &mut self.deck, &mut self.other_deck)
+                (
+                    &self.my_keys.verifying_key(),
+                    &mut self.deck,
+                    &mut self.other_deck,
+                )
             } else {
                 (&self.other_keys, &mut self.other_deck, &mut self.deck)
             };
 
         let to_verify = Game::encode_history_item(&item);
-        let signature = Signature::from_bytes(&item.signature).unwrap();
+        let signature = Signature::from_bytes(&item.signature);
 
         public_key
             .verify(&to_verify, &signature)
