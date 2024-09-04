@@ -1,8 +1,5 @@
 <script lang="ts">
-  import { writable } from "svelte/store";
-  // import { Game } from "./lib/libKnuckleBones";
   import { Game } from "./lib/wasm/lib_knuckle";
-  import { arrayBufferToBase64 } from "./lib/util";
   import Dice1 from "./icons/dices/Dice1.svelte";
   import Dice2 from "./icons/dices/Dice2.svelte";
   import Dice3 from "./icons/dices/Dice3.svelte";
@@ -10,52 +7,18 @@
   import Dice5 from "./icons/dices/Dice5.svelte";
   import Dice6 from "./icons/dices/Dice6.svelte";
   import Dice0 from "./icons/dices/Dice0.svelte";
-  import { base64ToArrayBuffer } from "./lib/util";
 
   const boardSize = {
     width: 3,
     height: 3,
   };
 
-  const keyType = "Ed25519";
-
-  const seedgen = () => (Math.random() * 2 ** 32) >>> 0;
-
   const seed = 573537897831321;
-  // const seed = seedgen()
-
-  const myId = 1;
-
   let game: Game;
 
-  // const kid = new Game(
-  //   player2 as CryptoKeyPair,
-  //   player1 as CryptoKeyPair,
-  //   boardSize,
-  //   serverData,
-  //   myId + 10
-  // );
+  // let state = writable<any>();
 
-  //   await kid.addOpponentMove(await boss.place(0));
-  //   await boss.addOpponentMove(await kid.place(0));
-  //   await kid.addOpponentMove(await boss.place(0));
-  //   await boss.addOpponentMove(await kid.place(0));
-  //   await kid.addOpponentMove(await boss.place(0));
-  //   await boss.addOpponentMove(await kid.place(0));
-  //   await kid.addOpponentMove(await boss.place(1));
-  //   await boss.addOpponentMove(await kid.place(1));
-  //   await kid.addOpponentMove(await boss.place(1));
-  //   await boss.addOpponentMove(await kid.place(1));
-  //   await kid.addOpponentMove(await boss.place(1));
-  //   await boss.addOpponentMove(await kid.place(1));
-  //   await kid.addOpponentMove(await boss.place(1));
-  //   await boss.addOpponentMove(await kid.place(1));
-  //   await kid.addOpponentMove(await boss.place(1));
-  //   await boss.addOpponentMove(await kid.place(1));
-
-  //   kid.debugPrint();
-
-  let state = writable<any>();
+  let state = $state()
 
   const icons = {
     0: Dice0,
@@ -70,11 +33,8 @@
   let ws: WebSocket;
   let peerConnection: RTCPeerConnection;
   let dataChannel: RTCDataChannel;
+  let starting: boolean = $state(false);
 
-  // startChatButton.addEventListener("click", startChat);
-  // sendMessageButton.addEventListener("click", sendMessage);
-
-  console.log("Pairing");
   function startChat() {
     ws = new WebSocket("ws://localhost:8080");
 
@@ -91,77 +51,10 @@
         const data = new TextDecoder().decode(await event.data.arrayBuffer());
         message = JSON.parse(data);
       }
-      console.log(message);
+
       switch (message.type) {
         case "paired":
-          const diceholder = (await crypto.subtle.generateKey(
-            {
-              name: keyType,
-            },
-            true,
-            ["sign", "verify"]
-          )) as CryptoKeyPair;
-          console.log("Pairing");
-          console.log("Pairing");
-          try {
-            await crypto.subtle.exportKey("raw", diceholder.privateKey);
-          } catch (e) {
-            console.log("Failed exporting key");
-            console.log(e);
-          }
-          // console.log(
-          //   arrayBufferToBase64(
-          //     await crypto.subtle.exportKey("raw", diceholder.privateKey)
-          //   )
-          // );
-          // console.log(
-          //   arrayBufferToBase64(
-          //     await crypto.subtle.exportKey("raw", diceholder.privateKey)
-          //   )
-          // );
-          // console.log(
-          //   arrayBufferToBase64(
-          //     await crypto.subtle.exportKey("raw", diceholder.privateKey)
-          //   )
-          // );
-          // let signature = await crypto.subtle.sign(
-          //   keyType,
-          //   diceholder.privateKey,
-          //   new TextEncoder().encode(`${myId}:${seed}`)
-          // );
-
-          // let primary = message.initiator;
-
-          // const serverData = {
-          //   starter: myId,
-          //   seed: seed,
-          //   signature: arrayBufferToBase64(signature),
-          // };
-
-          // const myPrivate = await crypto.subtle.importKey(
-          //   "raw",
-          //   base64ToArrayBuffer(message.private_key),
-          //   { name: "Ed25519" },
-          //   true,
-          //   ["sign"]
-          // );
-
-          // const myPublic = await crypto.subtle.importKey(
-          //   "raw",
-          //   base64ToArrayBuffer(message.public_key),
-          //   { name: "Ed25519" },
-          //   true,
-          //   ["verify"]
-          // );
-
-          // const otherPublic = await crypto.subtle.importKey(
-          //   "raw",
-          //   base64ToArrayBuffer(message.partner_key),
-          //   { name: "Ed25519" },
-          //   true,
-          //   ["verify"]
-          // );
-
+          starting = message.initiator
           game = new Game(
             message.public_key,
             message.private_key,
@@ -170,20 +63,11 @@
             boardSize.height,
             message.initiator,
             BigInt(seed)
-
-            // {
-            //   publicKey: myPublic,
-            //   privateKey: myPrivate,
-            // },
-            // {
-            //   publicKey: otherPublic,
-            // },
-            // boardSize,
-            // serverData,
-            // primary ? myId : myId + 10
           );
-          $state = await game.w_get_board_data();
+          state = await game.w_get_board_data();
           initializePeerConnection(message.initiator);
+
+          // ws.close()
           break;
         case "offer":
           await handleOffer(message);
@@ -266,8 +150,9 @@
 
     dataChannel.onmessage = (event) => {
       console.log(event);
-      game.w_add_opponent_move(event.data);
-      $state = game.w_get_board_data();
+      console.log("Received Data", new Uint8Array(event.data))
+      game.w_add_opponent_move(new Uint8Array(event.data));
+     state = game.w_get_board_data();
     };
   }
 
@@ -278,65 +163,71 @@
     if (dataChannel) {
       dataChannel.close();
     }
+
   }
+    $effect( () => {
+      console.log({...state})
+    })
 </script>
+
+<svelte:options runes={true} ></svelte:options>
+
+{#snippet diceLayout(deck, points, onclick)}
+{#each deck ?? [] as row, index}
+<button
+  class="size-10 flex justify-center bg-slate-600 text-white text-center text-3xl"
+  onclick={() => onclick(index)}
+>
+  <svelte:component this={icons[row]} />
+</button>
+{/each}
+{#each points ?? [] as row}
+<div
+  class="size-10 flex justify-center bg-slate-900 text-white text-center text-3xl"
+>
+  {row}
+</div>
+{/each}
+{/snippet}
 
 <div class="flex gap-4 mx-auto">
   <div class="ml-auto">
-    Next dice {$state?.nextDice} <br />
-    Seq {$state?.seq}
+    Next dice {state?.next_dice}<br />
+    Seq {state?.seq}<br />
+    Starting: {starting}<br />
+    your turn: {state?.your_turn}<br />
 
-    <button on:click={startChat}>Play</button>
+    {#if state?.your_turn}
+
+      <!--TODO: fix this {@render icons[state?.next_dice]({
+        class: "size-28 p-4"
+      })} -->
+      <svelte:component this={icons[state?.next_dice]} class="size-28 p-4" />
+    {/if}
+
+    <button onclick={startChat}>Play</button>
   </div>
   <div class=" flex gap-8 flex-col mr-auto">
     <div class="grid grid-cols-3 gap-3">
-      {#each $state?.decks.me ?? [] as row, index}
-        <button
-          class="size-10 flex justify-center bg-slate-600 text-white text-center text-3xl"
-          on:click={async () => {
-            // await kid.addOpponentMove(
-            //   await boss.place(index % boardSize.width)
-            // );
-
-            // await boss.addOpponentMove(
-            //   await kid.place(
-            //     (index + Math.round(Math.random() * 3)) % boardSize.width
-            //   )
-            // );
-
+      {@render diceLayout(state?.decks.me, state?.points?.me, (index:number) => {
+          if(!state?.your_turn) {alert("Not your turn");return}
+            if(state?.is_completed) {alert("Game is over!");return}
+            const sending =   game.w_place(index % boardSize.width);
+            console.log("sending",sending)
+            
             dataChannel.send(
-              JSON.stringify(await game.w_place(index % boardSize.width))
+             sending
             );
 
-            $state = game.w_get_board_data();
-          }}
-        >
-          <svelte:component this={icons[row]} />
-        </button>
-      {/each}
-      {#each $state?.points.me ?? [] as row}
-        <div
-          class="size-10 flex justify-center bg-slate-900 text-white text-center text-3xl"
-        >
-          {row}
-        </div>
-      {/each}
+            state = game.w_get_board_data();
+      })}
+      
     </div>
+    <span class="text-1xl font-semibold">Opponents layout: </span>
     <div class="grid grid-cols-3 gap-3 mx-auto">
-      {#each $state?.decks.other ?? [] as row}
-        <div
-          class="flex justify-center text-white text-center p-3 bg-slate-800"
-        >
-          <svelte:component this={icons[row]} class="size-28" />
-        </div>
-      {/each}
-      {#each $state?.points.other ?? [] as row}
-        <div
-          class="size-10 flex justify-center text-gray-900 text-3xl text-center w-full"
-        >
-          {row}
-        </div>
-      {/each}
+      {@render diceLayout(state?.decks.other, state?.points?.other, (index:number) => {
+        console.log("Tried clicking on ither dice ", index)
+       })}
     </div>
   </div>
 </div>

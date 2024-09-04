@@ -597,6 +597,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "bincode",
+ "cfg-if",
  "ed25519",
  "ed25519-dalek",
  "getrandom",
