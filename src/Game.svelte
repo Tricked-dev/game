@@ -1,6 +1,7 @@
 <script lang="ts">
   import { writable } from "svelte/store";
-  import { Game } from "./lib/libKnuckleBones";
+  // import { Game } from "./lib/libKnuckleBones";
+  import { Game } from "./lib/wasm/lib_knuckle";
   import { arrayBufferToBase64 } from "./lib/util";
   import Dice1 from "./icons/dices/Dice1.svelte";
   import Dice2 from "./icons/dices/Dice2.svelte";
@@ -54,7 +55,7 @@
 
   //   kid.debugPrint();
 
-  let state = writable<ReturnType<Game["getBoardData"]>>();
+  let state = writable<any>();
 
   const icons = {
     0: Dice0,
@@ -108,72 +109,80 @@
             console.log("Failed exporting key");
             console.log(e);
           }
-          console.log(
-            arrayBufferToBase64(
-              await crypto.subtle.exportKey("raw", diceholder.privateKey)
-            )
-          );
-          console.log(
-            arrayBufferToBase64(
-              await crypto.subtle.exportKey("raw", diceholder.privateKey)
-            )
-          );
-          console.log(
-            arrayBufferToBase64(
-              await crypto.subtle.exportKey("raw", diceholder.privateKey)
-            )
-          );
-          let signature = await crypto.subtle.sign(
-            keyType,
-            diceholder.privateKey,
-            new TextEncoder().encode(`${myId}:${seed}`)
-          );
+          // console.log(
+          //   arrayBufferToBase64(
+          //     await crypto.subtle.exportKey("raw", diceholder.privateKey)
+          //   )
+          // );
+          // console.log(
+          //   arrayBufferToBase64(
+          //     await crypto.subtle.exportKey("raw", diceholder.privateKey)
+          //   )
+          // );
+          // console.log(
+          //   arrayBufferToBase64(
+          //     await crypto.subtle.exportKey("raw", diceholder.privateKey)
+          //   )
+          // );
+          // let signature = await crypto.subtle.sign(
+          //   keyType,
+          //   diceholder.privateKey,
+          //   new TextEncoder().encode(`${myId}:${seed}`)
+          // );
 
-          let primary = message.initiator;
+          // let primary = message.initiator;
 
-          const serverData = {
-            starter: myId,
-            seed: seed,
-            signature: arrayBufferToBase64(signature),
-          };
+          // const serverData = {
+          //   starter: myId,
+          //   seed: seed,
+          //   signature: arrayBufferToBase64(signature),
+          // };
 
-          const myPrivate = await crypto.subtle.importKey(
-            "raw",
-            base64ToArrayBuffer(message.private_key),
-            { name: "Ed25519" },
-            true,
-            ["sign"]
-          );
+          // const myPrivate = await crypto.subtle.importKey(
+          //   "raw",
+          //   base64ToArrayBuffer(message.private_key),
+          //   { name: "Ed25519" },
+          //   true,
+          //   ["sign"]
+          // );
 
-          const myPublic = await crypto.subtle.importKey(
-            "raw",
-            base64ToArrayBuffer(message.public_key),
-            { name: "Ed25519" },
-            true,
-            ["verify"]
-          );
+          // const myPublic = await crypto.subtle.importKey(
+          //   "raw",
+          //   base64ToArrayBuffer(message.public_key),
+          //   { name: "Ed25519" },
+          //   true,
+          //   ["verify"]
+          // );
 
-          const otherPublic = await crypto.subtle.importKey(
-            "raw",
-            base64ToArrayBuffer(message.partner_key),
-            { name: "Ed25519" },
-            true,
-            ["verify"]
-          );
+          // const otherPublic = await crypto.subtle.importKey(
+          //   "raw",
+          //   base64ToArrayBuffer(message.partner_key),
+          //   { name: "Ed25519" },
+          //   true,
+          //   ["verify"]
+          // );
 
           game = new Game(
-            {
-              publicKey: myPublic,
-              privateKey: myPrivate,
-            },
-            {
-              publicKey: otherPublic,
-            },
-            boardSize,
-            serverData,
-            primary ? myId : myId + 10
+            message.public_key,
+            message.private_key,
+            message.partner_key,
+            boardSize.width,
+            boardSize.height,
+            message.initiator,
+            BigInt(seed)
+
+            // {
+            //   publicKey: myPublic,
+            //   privateKey: myPrivate,
+            // },
+            // {
+            //   publicKey: otherPublic,
+            // },
+            // boardSize,
+            // serverData,
+            // primary ? myId : myId + 10
           );
-          $state = game.getBoardData();
+          $state = await game.w_get_board_data();
           initializePeerConnection(message.initiator);
           break;
         case "offer":
@@ -257,7 +266,8 @@
 
     dataChannel.onmessage = (event) => {
       console.log(event);
-      game.addOpponentMove(JSON.parse(event.data));
+      game.w_add_opponent_move(event.data);
+      $state = game.w_get_board_data();
     };
   }
 
@@ -295,10 +305,10 @@
             // );
 
             dataChannel.send(
-              JSON.stringify(await game.place(index % boardSize.width))
+              JSON.stringify(await game.w_place(index % boardSize.width))
             );
 
-            $state = game.getBoardData();
+            $state = game.w_get_board_data();
           }}
         >
           <svelte:component this={icons[row]} />

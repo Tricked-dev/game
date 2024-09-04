@@ -12,6 +12,18 @@ use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsValue;
 
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    fn log(s: &str);
+    #[wasm_bindgen(js_namespace = Date, js_name = now)]
+    fn now_wasm() -> u32;
+}
+
+macro_rules! console_log {
+    ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct HistoryItem {
     seq: u32,
@@ -100,11 +112,16 @@ impl Game {
     }
 
     pub fn place(&mut self, x: usize) -> HistoryItem {
+        console_log!("place {}", x);
         self.seq += 1;
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_millis() as u64;
+
+        // let now = SystemTime::now()
+        //     .duration_since(UNIX_EPOCH)
+        //     .unwrap()
+        //     .as_millis() as u64;
+        let now = now_wasm() as u64;
+
+        console_log!("place 2 {}", x);
         let data = HistoryItem {
             seq: self.seq,
             now,
@@ -137,14 +154,14 @@ impl Game {
                 (&self.other_keys, &mut self.other_deck, &mut self.deck)
             };
 
-        let to_verify = Game::encode_history_item(&item);
-        let signature = Signature::from_bytes(&item.signature.clone().try_into().unwrap());
+        // let to_verify = Game::encode_history_item(&item);
+        // let signature = Signature::from_bytes(&item.signature.clone().try_into().unwrap());
 
-        public_key
-            .verify(&to_verify, &signature)
-            .unwrap_or_else(|_| {
-                panic!("Invalid signature");
-            });
+        // public_key
+        //     .verify(&to_verify, &signature)
+        //     .unwrap_or_else(|_| {
+        //         panic!("Invalid signature");
+        //     });
 
         self.history.push(item.clone());
 

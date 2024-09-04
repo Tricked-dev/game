@@ -60,8 +60,8 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     let user = User {
         partner_id: None,
         sender: tx.clone(),
-        priv_key: base64::encode(signing_key.to_bytes()),
-        pub_key: base64::encode(signing_key.verifying_key().to_bytes()),
+        priv_key: STANDARD_NO_PAD.encode(signing_key.to_bytes()),
+        pub_key: STANDARD_NO_PAD.encode(signing_key.verifying_key().to_bytes()),
     };
     let pub_key = user.pub_key.clone();
     let priv_key = user.priv_key.clone();
