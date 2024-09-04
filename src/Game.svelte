@@ -164,9 +164,6 @@
     }
 
   }
-    $effect( () => {
-      console.log({...state})
-    })
 </script>
 
 <svelte:options runes={true} ></svelte:options>
@@ -212,19 +209,10 @@
           // if(!state?.your_turn) {alert("Not your turn");return}
             if(state?.is_completed) {alert("Game is over!");return}
             const sending =   game.w_place(index % boardSize.width);
-            console.log("sending",sending)
-            
+
             dataChannel.send(
              sending
             );
-
-            console.log(game.w_get_board_data())
-            console.log(game.w_get_board_data())
-            console.log(game.w_get_board_data())
-            console.log(game.w_get_board_data())
-            console.log(game.w_get_board_data())
-            console.log(game.w_get_board_data())
-
             state = game.w_get_board_data();
       })}
       
