@@ -16,7 +16,6 @@
   const seed = 573537897831321;
   let game: Game;
 
-  // let state = writable<any>();
 
   let state = $state()
 
@@ -210,7 +209,7 @@
   <div class=" flex gap-8 flex-col mr-auto">
     <div class="grid grid-cols-3 gap-3">
       {@render diceLayout(state?.decks.me, state?.points?.me, (index:number) => {
-          if(!state?.your_turn) {alert("Not your turn");return}
+          // if(!state?.your_turn) {alert("Not your turn");return}
             if(state?.is_completed) {alert("Game is over!");return}
             const sending =   game.w_place(index % boardSize.width);
             console.log("sending",sending)
@@ -218,6 +217,13 @@
             dataChannel.send(
              sending
             );
+
+            console.log(game.w_get_board_data())
+            console.log(game.w_get_board_data())
+            console.log(game.w_get_board_data())
+            console.log(game.w_get_board_data())
+            console.log(game.w_get_board_data())
+            console.log(game.w_get_board_data())
 
             state = game.w_get_board_data();
       })}
