@@ -23,4 +23,5 @@ pnpm-debug.log*
 # jetbrains setting folder
 .idea/
 target/
-wasm
+wasmdev
+wasmprd

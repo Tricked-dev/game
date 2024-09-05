@@ -7,9 +7,9 @@ use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::RngCore;
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
+#[allow(unused)]
 use std::time::{SystemTime, UNIX_EPOCH};
 use wasm_bindgen::prelude::wasm_bindgen;
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsValue;
 
 #[wasm_bindgen]

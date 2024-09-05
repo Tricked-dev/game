@@ -1,3 +1,10 @@
 [workspace]
 resolver = "2"
 members = ["lib_knuckle", "que"]
+
+[profile.release-wasm]
+inherits = "release"
+opt-level = 'z'
+lto = true
+panic = 'abort'
+codegen-units = 1

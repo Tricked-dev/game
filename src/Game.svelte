@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { Game } from "./lib/wasm/lib_knuckle";
+  import { Game } from "./lib/wasmdev/lib_knuckle";
   import Dice1 from "./icons/dices/Dice1.svelte";
   import Dice2 from "./icons/dices/Dice2.svelte";
   import Dice3 from "./icons/dices/Dice3.svelte";
@@ -173,6 +173,7 @@
 <button
   class="size-10 flex justify-center bg-slate-600 text-white text-center text-3xl"
   onclick={() => onclick(index)}
+  ondrop={() => onclick(index)}
 >
   <svelte:component this={icons[row]} />
 </button>
@@ -220,7 +221,7 @@
     <span class="text-1xl font-semibold">Opponents layout: </span>
     <div class="grid grid-cols-3 gap-3 mx-auto">
       {@render diceLayout(state?.decks.other, state?.points?.other, (index:number) => {
-        console.log("Tried clicking on ither dice ", index)
+        console.log("Tried clicking on other dice ", index)
        })}
     </div>
   </div>
