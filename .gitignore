@@ -25,3 +25,4 @@ pnpm-debug.log*
 target/
 wasmdev
 wasmprd
+server_seed

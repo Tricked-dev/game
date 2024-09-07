@@ -6,5 +6,5 @@ RUSTFLAGS="-Zlocation-detail=none" cargo +nightly build -Z build-std=std,panic_a
      --target wasm32-unknown-unknown --profile release-wasm \
      --lib -p lib_knuckle
 
-wasm-bindgen ./target/wasm32-unknown-unknown/release/lib_knuckle.wasm --target bundler --out-dir src/lib/wasmprd
+wasm-bindgen ./target/wasm32-unknown-unknown/release-wasm/lib_knuckle.wasm --target bundler --out-dir src/lib/wasmprd
 wasm-opt -Oz --optimize-for-js -o ./src/lib/wasmprd/lib_knuckle_bg.wasm ./src/lib/wasmprd/lib_knuckle_bg.wasm

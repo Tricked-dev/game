@@ -115,7 +115,7 @@ impl Game {
             other_keys,
             deck_size,
             info,
-            verify: false,
+            verify: true,
         }
     }
 
