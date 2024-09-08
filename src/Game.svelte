@@ -21,20 +21,22 @@
 
   let state = $state()
 
-  const icons = {
-      0: Dice0,
-      1: Dice1,
-      2: Dice2,
-      3: Dice3,
-      4: Dice4,
-      5: Dice5,
-      6: Dice6,
-  };
+
+  const icons = [
+      Dice0,
+      Dice1,
+      Dice2,
+      Dice3,
+      Dice4,
+      Dice5,
+      Dice6,
+  ]
 
   let ws: WebSocket;
   let peerConnection: RTCPeerConnection;
   let dataChannel: RTCDataChannel;
   let starting: boolean = $state(false);
+  let dialog:HTMLDialogElement= $state();
 
   function startChat() {
       if (
@@ -105,7 +107,7 @@
   function initializePeerConnection(isInitiator) {
       peerConnection = new RTCPeerConnection({
           iceServers: [
-              { urls: "stun:stun.l.google.com:19302",},
+              { urls: ["stun:stun.l.google.com:19302"],},
               { url: 'stun:stun1.l.google.com:19302' },
               // thank uguys for running this server!
               {
@@ -191,6 +193,12 @@
 
   }
   $inspect(gameInfo)
+
+  $effect(() => {
+    if(state?.is_completed) {
+      dialog.showModal()
+    }
+  })
 </script>
 
 <svelte:options runes={true} ></svelte:options>
@@ -214,12 +222,20 @@
   {/each}
 {/snippet}
 
+<dialog bind:this={dialog}>
+    Game Completed:<br>
+    Your score: {state?.points?.me?.reduce((a, b) => a + b, 0)}<br>
+    Opponent score: {state?.points?.other?.reduce((a, b) => a + b, 0)}<br>
+    <button onclick={() => window.location.reload()}>Restart</button>
+</dialog>
+
 <div class="flex gap-4 mx-auto">
     <div class="ml-auto">
         Next dice {state?.next_dice}<br />
         Seq {state?.seq}<br />
         Starting: {starting}<br />
         your turn: {state?.your_turn}<br />
+        Completed: {state?.is_completed}<br />
         Your id {gameInfo?.public_key.slice(0,5)}<br/>
         Partner id {gameInfo?.partner_key.slice(0,5)}<br/>
 

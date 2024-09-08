@@ -10,11 +10,11 @@ use serde::{Deserialize, Serialize};
 use shift_columns::{shift_column_values, FloatDirection};
 #[allow(unused)]
 use std::time::{SystemTime, UNIX_EPOCH};
+#[cfg(any(test, target_arch = "wasm32", feature = "wasm"))]
 use wasm_bindgen::prelude::wasm_bindgen;
-use wasm_bindgen::JsValue;
 
 mod shift_columns;
-#[cfg(any(test, target_arch = "wasm32", debug_assertions))]
+#[cfg(any(test, target_arch = "wasm32", feature = "wasm"))]
 mod wasm;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -58,7 +58,7 @@ impl Dice {
     }
 }
 
-#[cfg_attr(any(target_arch = "wasm32", debug_assertions), wasm_bindgen)]
+#[cfg_attr(any(test, target_arch = "wasm32", feature = "wasm"), wasm_bindgen)]
 pub struct Game {
     history: Vec<HistoryItem>,
     deck: Vec<u32>,
@@ -154,6 +154,9 @@ impl Game {
     }
 
     fn play_move(&mut self, item: HistoryItem) {
+        if self.is_completed() {
+            panic!("Game is already completed");
+        }
         let player = self.seq % 2;
         let me_first = self.info.starting;
 
@@ -211,6 +214,10 @@ impl Game {
         shift_column_values(&mut self.deck, self.deck_size.0, FloatDirection::Down);
     }
 
+    fn is_completed(&self) -> bool {
+        self.deck.iter().all(|c| *c != 0) || self.other_deck.iter().all(|c| *c != 0)
+    }
+
     pub fn get_board_data(&self) -> BoardData {
         let player = self.seq % 2;
         let me_first = self.info.starting;
@@ -228,8 +235,7 @@ impl Game {
             deck_size: self.deck_size,
             next_dice: self.dice.peek() as u8,
             your_turn: !((me_first && player == 1) || (!me_first && player == 0)),
-            is_completed: !(self.deck.iter().any(|c| *c == 0)
-                || self.other_deck.iter().any(|c| *c == 0)),
+            is_completed: self.is_completed(),
         }
     }
 }
@@ -392,6 +398,29 @@ mod tests {
         let points = calculate_knucklebones_points(&[7], 1);
         assert_eq!(points, vec![]);
     }
+    #[test]
+    fn test_is_completed() {
+        let arr = vec![1].into_iter().cycle().take(9).collect::<Vec<u32>>();
+        let mut csprng = OsRng;
+        let my_keys = SigningKey::generate(&mut csprng);
+        let other_keys = SigningKey::generate(&mut csprng);
+        let deck_size = (3, 3);
+        let mut game = Game::new(
+            my_keys,
+            other_keys.verifying_key(),
+            deck_size,
+            ServerGameInfo {
+                seed: 0,
+                starting: true,
+            },
+        );
+        assert!(!game.get_board_data().is_completed);
+        game.deck = arr.clone();
+        assert!(game.get_board_data().is_completed);
+        game.other_deck = arr.clone();
+        assert!(game.get_board_data().is_completed);
+    }
+
     #[test]
     fn test_game() {
         let mut csprng = OsRng;
@@ -577,8 +606,6 @@ mod tests {
         game.mock_move_nodice(2);
         game.mock_move_nodice(1);
         game.mock_move_nodice(1);
-
-        game.debug_print_board();
     }
 
     #[test]
@@ -600,7 +627,5 @@ mod tests {
         game.mock_move_nodice(1);
         game.mock_move_nodice(0);
         game.mock_move_nodice(0);
-
-        game.debug_print_board();
     }
 }
