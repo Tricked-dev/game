@@ -7,10 +7,13 @@ use ed25519_dalek::{SigningKey, VerifyingKey};
 use rand::RngCore;
 use rand::{rngs::StdRng, SeedableRng};
 use serde::{Deserialize, Serialize};
+use shift_columns::{shift_column_values, FloatDirection};
 #[allow(unused)]
 use std::time::{SystemTime, UNIX_EPOCH};
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
+
+mod shift_columns;
 
 #[wasm_bindgen]
 extern "C" {
@@ -163,7 +166,7 @@ impl Game {
         let player = self.seq % 2;
         let me_first = self.info.starting;
 
-        let (public_key, deck, other_deck) =
+        let (public_key, deck, mut other_deck) =
             if (me_first && player == 1) || (!me_first && player == 0) {
                 (
                     &self.my_keys.verifying_key(),
@@ -210,6 +213,24 @@ impl Game {
             let pos = item.x + i * self.deck_size.1;
             if other_deck[pos] == num {
                 other_deck[pos] = 0;
+            }
+        }
+
+        Self::replace_in_column(other_deck, self.deck_size.1, num, item.x);
+
+        shift_column_values(&mut self.other_deck, self.deck_size.0, FloatDirection::Up);
+        shift_column_values(&mut self.deck, self.deck_size.0, FloatDirection::Down);
+    }
+
+    fn replace_in_column(vec: &mut [u32], width: usize, x: u32, col_idx: usize) {
+        // Step over each row by incrementing by width
+        for row_idx in 0..vec.len() / width {
+            // Calculate the index of the element in the vector
+            let idx = row_idx * width + col_idx;
+
+            // If the current element in the column equals `x`, replace it with 0
+            if vec[idx] == x {
+                vec[idx] = 0;
             }
         }
     }
@@ -380,6 +401,19 @@ mod tests {
 
     use super::*;
 
+    impl Game {
+        fn mock_move(&mut self, number: u8, x: usize) {
+            self.dice.set_next(number);
+            self.play_move(HistoryItem {
+                seq: self.seq,
+                now: 0,
+                x,
+                signature: vec![],
+            });
+            self.seq += 1;
+        }
+    }
+
     #[test]
     fn test_count_occurrences() {
         let arr = vec![1, 2, 3, 4, 1, 2, 3, 4];
@@ -461,7 +495,6 @@ mod tests {
             starting: true,
         };
         let mut dice = Dice::new(0);
-        dice.set_next(1);
         let mut game = Game {
             deck: vec![0, 1, 1, 1, 1, 1, 1, 1, 1],
             other_deck: vec![1, 1, 1, 1, 1, 1, 1, 1, 1],
@@ -475,32 +508,30 @@ mod tests {
             verify: false,
         };
 
-        game.play_move(HistoryItem {
-            now: 0,
-            seq: 1,
-            x: 0,
-            signature: vec![],
-        });
+        game.mock_move(1, 0);
         let info = game.get_board_data();
         assert_eq!(info.decks.other[0], 0);
         assert_eq!(info.decks.other[3], 0);
         assert_eq!(info.decks.other[6], 0);
-        game.seq += 1;
-        game.dice.set_next(1);
-        game.play_move(HistoryItem {
-            now: 0,
-            seq: 2,
-            x: 0,
-            signature: vec![],
-        });
+
+        game.mock_move(1, 0);
+
         let info = game.get_board_data();
         assert_eq!(info.decks.me[0], 0);
         assert_eq!(info.decks.me[3], 0);
         assert_eq!(info.decks.me[6], 0);
 
+        game.other_deck[0] = 1;
+        game.other_deck[3] = 2;
+        game.other_deck[6] = 1;
+
+        game.mock_move(1, 0);
+
+        assert_eq!(game.other_deck[0], 2);
+
         game.deck = vec![];
         game.other_deck = vec![];
         let info = game.get_board_data();
-        assert!(info.is_completed)
+        assert!(info.is_completed);
     }
 }
