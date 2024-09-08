@@ -166,7 +166,7 @@ impl Game {
         let player = self.seq % 2;
         let me_first = self.info.starting;
 
-        let (public_key, deck, mut other_deck) =
+        let (public_key, deck, other_deck) =
             if (me_first && player == 1) || (!me_first && player == 0) {
                 (
                     &self.my_keys.verifying_key(),
@@ -209,30 +209,28 @@ impl Game {
         let num = self.dice.roll() as u32;
         deck[pos] = num;
 
-        for i in 0..self.deck_size.0 {
-            let pos = item.x + i * self.deck_size.1;
-            if other_deck[pos] == num {
-                other_deck[pos] = 0;
+        // for i in 0..self.deck_size.0 {
+        //     let pos = item.x + i * self.deck_size.1;
+        //     if other_deck[pos] == num {
+        //         other_deck[pos] = 0;
+        //     }
+        // }
+
+        let width = self.deck_size.1;
+        let col_idx = item.x;
+        println!("- num: {num}");
+        for row_idx in 0..other_deck.len() / width {
+            let idx = row_idx * width + col_idx;
+            dbg!(other_deck[idx] == num);
+            println!("{}: {} value: ", idx, other_deck[idx],);
+            if other_deck[idx] == num {
+                other_deck[idx] = 0;
+                println!("Set to 0");
             }
         }
-
-        Self::replace_in_column(other_deck, self.deck_size.1, num, item.x);
 
         shift_column_values(&mut self.other_deck, self.deck_size.0, FloatDirection::Up);
         shift_column_values(&mut self.deck, self.deck_size.0, FloatDirection::Down);
-    }
-
-    fn replace_in_column(vec: &mut [u32], width: usize, x: u32, col_idx: usize) {
-        // Step over each row by incrementing by width
-        for row_idx in 0..vec.len() / width {
-            // Calculate the index of the element in the vector
-            let idx = row_idx * width + col_idx;
-
-            // If the current element in the column equals `x`, replace it with 0
-            if vec[idx] == x {
-                vec[idx] = 0;
-            }
-        }
     }
 
     pub fn get_board_data(&self) -> BoardData {
@@ -412,6 +410,44 @@ mod tests {
             });
             self.seq += 1;
         }
+
+        fn mock_move_nodice(&mut self, x: usize) {
+            self.play_move(HistoryItem {
+                seq: self.seq,
+                now: 0,
+                x,
+                signature: vec![],
+            });
+            self.seq += 1;
+        }
+
+        fn debug_print_board(&self) {
+            // return;
+            let board = self.get_board_data();
+            println!("{} mine -------", self.seq);
+            let mut output = String::new();
+            for (i, &x) in board.decks.me.iter().enumerate() {
+                if i % board.deck_size.0 == 0 {
+                    output.push('\n');
+                }
+                output.push_str(&x.to_string());
+                output.push(' ');
+            }
+
+            println!("{}", output.trim());
+            println!("{} other -------", self.seq);
+            let mut output = String::new();
+
+            for (i, &x) in board.decks.other.iter().enumerate() {
+                if i % board.deck_size.0 == 0 {
+                    output.push('\n');
+                }
+                output.push_str(&x.to_string());
+                output.push(' ');
+            }
+
+            println!("{}", output.trim());
+        }
     }
 
     #[test]
@@ -494,14 +530,13 @@ mod tests {
             seed: 0,
             starting: true,
         };
-        let mut dice = Dice::new(0);
         let mut game = Game {
             deck: vec![0, 1, 1, 1, 1, 1, 1, 1, 1],
             other_deck: vec![1, 1, 1, 1, 1, 1, 1, 1, 1],
             deck_size,
             history: vec![],
             seq: 1,
-            dice,
+            dice: Dice::new(0),
             my_keys,
             other_keys: other_keys.verifying_key(),
             info,
@@ -533,5 +568,127 @@ mod tests {
         game.other_deck = vec![];
         let info = game.get_board_data();
         assert!(info.is_completed);
+    }
+
+    #[test]
+    fn test_removing_numbers_logic() {
+        let mut csprng = OsRng;
+        let my_keys = SigningKey::generate(&mut csprng);
+        let other_keys = SigningKey::generate(&mut csprng);
+        let deck_size = (3, 3);
+        let mut game = Game::new(
+            my_keys,
+            other_keys.verifying_key(),
+            deck_size,
+            ServerGameInfo {
+                seed: 0,
+                starting: true,
+            },
+        );
+
+        game.disable_verify();
+
+        game.mock_move(1, 2);
+        game.mock_move(6, 0);
+        game.mock_move(1, 1);
+        game.mock_move(2, 0);
+        game.mock_move(2, 1);
+        game.mock_move(6, 0);
+        game.mock_move(6, 0);
+        let info = game.get_board_data();
+        // is on 6 cause it got floated
+        assert_eq!(info.decks.me[6], 2);
+    }
+
+    #[test]
+    fn test_removing_numbers_logic2() {
+        let mut csprng = OsRng;
+        let my_keys = SigningKey::generate(&mut csprng);
+        let other_keys = SigningKey::generate(&mut csprng);
+        let deck_size = (3, 3);
+        let mut game = Game::new(
+            my_keys,
+            other_keys.verifying_key(),
+            deck_size,
+            ServerGameInfo {
+                seed: 0,
+                starting: true,
+            },
+        );
+
+        game.disable_verify();
+        game.mock_move(1, 0);
+        game.mock_move(3, 1);
+        game.debug_print_board();
+        game.mock_move(1, 0);
+        game.mock_move(2, 1);
+        game.debug_print_board();
+        game.mock_move(1, 0);
+        game.mock_move(3, 1);
+        game.debug_print_board();
+        game.mock_move(3, 1);
+
+        let info = game.get_board_data();
+        assert_eq!(info.decks.me[1], 0);
+        assert_eq!(info.decks.me[4], 0);
+        assert_eq!(info.decks.me[7], 2);
+    }
+
+    #[test]
+    fn test_real_game() {
+        //427896094
+        let mut csprng = OsRng;
+        let my_keys = SigningKey::generate(&mut csprng);
+        let other_keys = SigningKey::generate(&mut csprng);
+        let deck_size = (3, 3);
+        let info = ServerGameInfo {
+            seed: 427896094,
+            starting: true,
+        };
+        let mut game = Game::new(my_keys, other_keys.verifying_key(), deck_size, info);
+        game.disable_verify();
+
+        game.mock_move_nodice(0);
+        game.mock_move_nodice(0);
+        game.mock_move_nodice(0);
+        game.mock_move_nodice(0);
+        game.mock_move_nodice(0);
+        game.mock_move_nodice(0);
+        game.mock_move_nodice(0);
+        game.mock_move_nodice(0);
+        game.mock_move_nodice(1);
+        game.mock_move_nodice(1);
+        game.mock_move_nodice(1);
+        game.mock_move_nodice(1);
+        game.mock_move_nodice(1);
+        game.mock_move_nodice(2);
+        game.mock_move_nodice(2);
+        game.mock_move_nodice(1);
+        game.mock_move_nodice(1);
+
+        game.debug_print_board();
+    }
+
+    #[test]
+    fn test_real_game2() {
+        let mut csprng = OsRng;
+        let my_keys = SigningKey::generate(&mut csprng);
+        let other_keys = SigningKey::generate(&mut csprng);
+        let deck_size = (3, 3);
+        let info = ServerGameInfo {
+            seed: 1282226401,
+            starting: true,
+        };
+        let mut game = Game::new(my_keys, other_keys.verifying_key(), deck_size, info);
+        game.disable_verify();
+
+        game.mock_move_nodice(0);
+        game.mock_move_nodice(0);
+        game.mock_move_nodice(1);
+        game.mock_move_nodice(1);
+        game.mock_move_nodice(0);
+        game.mock_move_nodice(0);
+
+        game.debug_print_board();
     }
 }

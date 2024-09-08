@@ -77,6 +77,8 @@
 
                   gameInfo = message;
 
+                  window.game = game;
+
                   // ws.close()
                   break;
               case "offer":
