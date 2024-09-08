@@ -188,8 +188,6 @@ impl Game {
                 });
         }
 
-        self.history.push(item.clone());
-
         let mut item_y = 0;
         for i in 0..self.deck_size.0 {
             if deck[item.x + i * self.deck_size.1] == 0 {
@@ -209,23 +207,12 @@ impl Game {
         let num = self.dice.roll() as u32;
         deck[pos] = num;
 
-        // for i in 0..self.deck_size.0 {
-        //     let pos = item.x + i * self.deck_size.1;
-        //     if other_deck[pos] == num {
-        //         other_deck[pos] = 0;
-        //     }
-        // }
-
         let width = self.deck_size.1;
         let col_idx = item.x;
-        println!("- num: {num}");
         for row_idx in 0..other_deck.len() / width {
             let idx = row_idx * width + col_idx;
-            dbg!(other_deck[idx] == num);
-            println!("{}: {} value: ", idx, other_deck[idx],);
             if other_deck[idx] == num {
                 other_deck[idx] = 0;
-                println!("Set to 0");
             }
         }
 
