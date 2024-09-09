@@ -14,6 +14,7 @@ extern "C" {
     pub fn now_wasm() -> u32;
 }
 
+#[allow(unused)]
 macro_rules! console_log {
     ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
 }

@@ -1,5 +1,3 @@
-use base64::prelude::BASE64_STANDARD_NO_PAD;
-use base64::Engine;
 use ed25519::signature::SignerMut;
 use ed25519::Signature;
 use ed25519_dalek::Verifier;
