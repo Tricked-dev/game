@@ -40,6 +40,9 @@
   let starting: boolean = $state(false);
   let dialog:HTMLDialogElement= $state();
 
+  let pub_key:string;
+  let priv_key:string
+
   function startChat() {
 
       if (
@@ -74,12 +77,14 @@
                     signature: response,
                     pub_key: json.pub_key
                 }));
+                pub_key = json.pub_key;
+                priv_key = private_key;
                 break;
               case "paired":
                   starting = message.initiator
                   game = new Game(
-                      message.public_key,
-                      message.private_key,
+                      pub_key,
+                      priv_key,
                       message.partner_key,
                       boardSize.width,
                       boardSize.height,
@@ -118,20 +123,13 @@
 
   function initializePeerConnection(isInitiator) {
       peerConnection = new RTCPeerConnection({
-          iceServers: [
-              { urls: ["stun:stun.l.google.com:19302"],},
-              { url: 'stun:stun1.l.google.com:19302' },
-              // thank uguys for running this server!
-              {
-                urls: [
-                  "turn:eu-0.turn.peerjs.com:3478",
-                  "turn:us-0.turn.peerjs.com:3478",
-                ],
-                username: "peerjs",
-                credential: "peerjsp",
-              },
-          ],
-
+          iceServers: [{
+                    'urls': [
+                        'stun:stun.l.google.com:19302',
+                        'stun:stun1.l.google.com:19302',
+                        'stun:stun2.l.google.com:19302',
+                    ]
+                }]
       });
 
       peerConnection.onicecandidate = (event) => {
@@ -145,6 +143,12 @@
           }
       };
 
+      console.log(peerConnection)
+      ;
+      window.pc = peerConnection;
+      peerConnection.addEventListener("connectionstatechange", (event) => {
+        console.log("connectionstatechange", event);
+      })
       if (isInitiator) {
           dataChannel = peerConnection.createDataChannel("chat");
           setupDataChannel();
@@ -159,6 +163,8 @@
                           offer: peerConnection.localDescription,
                       })
                   );
+      console.log(peerConnection)
+
               });
       } else {
           peerConnection.ondatachannel = (event) => {

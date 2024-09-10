@@ -171,7 +171,7 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                         );
                         //TODO: check if in redis
                         if verify_key
-                            .verify_strict(secret.to_ne_bytes().as_slice(), &signature)
+                            .verify_strict(secret.to_string().as_bytes(), &signature)
                             .is_ok()
                         {
                             user.pub_key = Some(pub_key.to_owned());
