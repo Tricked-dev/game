@@ -1,3 +1,5 @@
+use base64::prelude::BASE64_STANDARD_NO_PAD;
+use base64::Engine;
 use ed25519::signature::SignerMut;
 use ed25519::Signature;
 use ed25519_dalek::Verifier;
@@ -14,6 +16,26 @@ use wasm_bindgen::prelude::wasm_bindgen;
 mod shift_columns;
 #[cfg(any(test, target_arch = "wasm32", feature = "wasm"))]
 mod wasm;
+#[cfg(any(test, target_arch = "wasm32", feature = "wasm"))]
+pub use wasm::*;
+
+pub fn signing_key_from_string<T: AsRef<str>>(key: T) -> Option<SigningKey> {
+    Some(SigningKey::from_bytes(
+        &BASE64_STANDARD_NO_PAD
+            .decode(key.as_ref())
+            .ok()?
+            .try_into()
+            .ok()?,
+    ))
+}
+pub fn signature_from_string(key: &str) -> Option<Signature> {
+    Some(Signature::from_bytes(
+        &BASE64_STANDARD_NO_PAD.decode(key).ok()?.try_into().ok()?,
+    ))
+}
+pub fn verifying_key_from_string(key: &str) -> Option<VerifyingKey> {
+    VerifyingKey::from_bytes(&BASE64_STANDARD_NO_PAD.decode(key).ok()?.try_into().ok()?).ok()
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct HistoryItem {

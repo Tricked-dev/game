@@ -1,6 +1,7 @@
 <script lang="ts">
   import {
-      Game
+      Game,
+      sign_message
   } from "./lib/wasmdev/lib_knuckle";
   import Dice1 from "./icons/dices/Dice1.svelte";
   import Dice2 from "./icons/dices/Dice2.svelte";
@@ -15,11 +16,12 @@
       height: 3,
   };
 
-  const seed = 573537897831321;
   let game: Game;
   let gameInfo =$state()
 
   let state = $state()
+
+  let backendUrl = import.meta.env.DEV ? "http://localhost:8083" : ``;
 
 
   const icons = [
@@ -39,6 +41,7 @@
   let dialog:HTMLDialogElement= $state();
 
   function startChat() {
+
       if (
           import.meta.env.DEV) {
           ws = new WebSocket("ws://localhost:8083/ws");
@@ -47,9 +50,7 @@
       }
 
       ws.onopen = () => {
-          ws.send(JSON.stringify({
-              type: "join"
-          }));
+
       };
 
       ws.onmessage = async (event) => {
@@ -61,8 +62,19 @@
               const data = new TextDecoder().decode(await event.data.arrayBuffer());
               message = JSON.parse(data);
           }
-
+          console.log("WS MSG", message);
           switch (message.type) {
+              case "verify":
+                let data = await fetch(`${backendUrl}/signup`)
+                let json = await data.json();
+                const private_key = json.priv_key;
+                const response = await sign_message(private_key, message.verify_time);
+               ws.send(JSON.stringify({
+                    type: "join",
+                    signature: response,
+                    pub_key: json.pub_key
+                }));
+                break;
               case "paired":
                   starting = message.initiator
                   game = new Game(

@@ -1,10 +1,11 @@
 use base64::prelude::BASE64_STANDARD_NO_PAD;
 use base64::Engine;
+use ed25519::signature::SignerMut;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 
-use crate::{Game, HistoryItem, ServerGameInfo};
+use crate::{signing_key_from_string, Game, HistoryItem, ServerGameInfo};
 
 #[wasm_bindgen]
 extern "C" {
@@ -17,6 +18,14 @@ extern "C" {
 #[allow(unused)]
 macro_rules! console_log {
     ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
+}
+
+#[wasm_bindgen]
+pub fn sign_message(key: String, message: String) -> String {
+    let mut my_keys = signing_key_from_string(key).unwrap();
+    let signature = my_keys.sign(message.as_bytes());
+    let signature = signature.to_vec();
+    BASE64_STANDARD_NO_PAD.encode(signature)
 }
 
 #[wasm_bindgen]

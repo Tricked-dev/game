@@ -21,3 +21,16 @@ socketioxide = "0.14.1"
 tokio = { version = "1.40.0", features = ["full"] }
 uuid = { version = "1.10.0", features = ["serde", "v4"] }
 lib_knuckle = { path = "../lib_knuckle", default-features = false }
+
+bb8 = "0.7.1"
+bb8-redis = "0.14.0"
+redis = "0.24.0"
+
+tracing-subscriber = { version = "0.3.18", features = [
+    "parking_lot",
+    "once_cell",
+    "tracing",
+    "env-filter",
+] }
+tracing = "0.1.40"
+tower-http = { version = "0.5.2", features = ["cors"] }

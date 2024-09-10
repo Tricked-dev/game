@@ -4,25 +4,28 @@ use axum::{
         State,
     },
     routing::get,
-    Router,
+    Json, Router,
 };
 use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
-use ed25519::signature::SignerMut;
-use ed25519_dalek::SigningKey;
+use bb8_redis::{bb8, redis::AsyncCommands, RedisConnectionManager};
+use ed25519::{signature::SignerMut, Signature};
+use ed25519_dalek::{SigningKey, VerifyingKey};
 use embed::static_handler;
 use futures::{SinkExt, StreamExt};
+use http::Method;
 use rand_core::OsRng;
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, sync::Arc, time::SystemTime};
 use tokio::{fs, sync::Mutex};
+use tower_http::cors::{Any, CorsLayer};
+use tracing_subscriber::layer::SubscriberExt;
 use uuid::Uuid;
 
 mod embed;
-
+mod pool_extractor;
 struct User {
     partner_id: Option<Uuid>,
     sender: tokio::sync::mpsc::UnboundedSender<Message>,
-    pub_key: String,
-    priv_key: String,
+    pub_key: Option<String>,
 }
 #[derive(Clone)]
 struct AppState {
@@ -33,6 +36,26 @@ struct AppState {
 
 #[tokio::main]
 async fn main() {
+    tracing_subscriber::registry()
+        .with(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| format!("{}=debug", env!("CARGO_CRATE_NAME")).into()),
+        )
+        .with(tracing_subscriber::fmt::layer());
+    tracing::debug!("connecting to redis");
+
+    // let manager = RedisConnectionManager::new("redis://localhost").unwrap();
+    // let pool = bb8::Pool::builder().build(manager).await.unwrap();
+
+    // {
+    //     // ping the database before starting
+    //     let mut conn = pool.get().await.unwrap();
+    //     // conn.set::<&str, &str, ()>("foo", "bar").await.unwrap();
+    //     let result: String = conn.get("foo").await.unwrap();
+    //     assert_eq!(result, "bar");
+    // }
+    tracing::debug!("successfully connected to redis and pinged it");
+
     let dice_seed_signing_keys = match fs::read("server_seed").await {
         Ok(data) => SigningKey::from_bytes(&data.try_into().unwrap()),
         Err(_) => {
@@ -53,11 +76,23 @@ async fn main() {
         .route("/_astro/*file", get(static_handler))
         .route("/", get(static_handler))
         .route("/index.html", get(static_handler))
+        .route("/signup", get(signup))
         .route("/ws", get(ws_handler))
-        .with_state(app_state);
+        .with_state(app_state)
+        .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any));
     println!("Starting at localhost:8083");
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8083").await.unwrap();
     axum::serve(listener, app).await.unwrap();
+}
+
+async fn signup() -> impl axum::response::IntoResponse {
+    let mut rng = OsRng;
+
+    let priv_key = SigningKey::generate(&mut rng);
+    Json(serde_json::json!({
+        "pub_key": STANDARD_NO_PAD.encode(priv_key.verifying_key().to_bytes()),
+        "priv_key": STANDARD_NO_PAD.encode(priv_key.to_bytes())
+    }))
 }
 
 async fn ws_handler(
@@ -72,18 +107,29 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
     let mut csprng = OsRng;
-    let signing_key: SigningKey = SigningKey::generate(&mut csprng);
 
     let user_id = Uuid::new_v4();
     let user = User {
         partner_id: None,
         sender: tx.clone(),
-        priv_key: STANDARD_NO_PAD.encode(signing_key.to_bytes()),
-        pub_key: STANDARD_NO_PAD.encode(signing_key.verifying_key().to_bytes()),
+        pub_key: None,
     };
-    let pub_key = user.pub_key.clone();
-    let priv_key = user.priv_key.clone();
+    let secret = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
     state.all_users.lock().await.insert(user_id, user);
+
+    sender
+        .send(Message::Text(
+            serde_json::to_string(&serde_json::json!({
+                "type": "verify",
+                "verify_time": secret.to_string()
+            }))
+            .unwrap(),
+        ))
+        .await
+        .unwrap();
 
     tokio::spawn(async move {
         while let Some(message) = rx.recv().await {
@@ -98,28 +144,67 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
             let data: serde_json::Value = serde_json::from_str(&text).unwrap();
             match data["type"].as_str() {
                 Some("join") => {
-                    let mut waiting_users = state.waiting_users.lock().await;
-                    if let Some(partner_user_id) = waiting_users.pop() {
-                        let mut all_users = state.all_users.lock().await;
-                        if let Some(partner_user) = all_users.get(&partner_user_id) {
-                            let seed = rand_core::RngCore::next_u32(&mut csprng);
-                            let time = std::time::SystemTime::now()
-                                .duration_since(std::time::UNIX_EPOCH)
+                    let mut all_users = state.all_users.lock().await;
+
+                    if let Some(user) = all_users.get_mut(&user_id) {
+                        let signature = data["signature"].as_str().unwrap();
+                        let pub_key = data["pub_key"].as_str().unwrap();
+
+                        dbg!(&data, &text);
+
+                        let verify_key = VerifyingKey::from_bytes(
+                            STANDARD_NO_PAD
+                                .decode(pub_key)
                                 .unwrap()
-                                .as_secs();
-                            let signature = state
-                                .dice_seed_signing_keys
-                                .lock()
-                                .await
-                                .sign(format!("{seed}:{time}").as_bytes());
-                            partner_user
+                                .as_slice()
+                                .try_into()
+                                .unwrap(),
+                        )
+                        .unwrap();
+                        let signature = Signature::from_bytes(
+                            STANDARD_NO_PAD
+                                .decode(signature)
+                                .unwrap()
+                                .as_slice()
+                                .try_into()
+                                .unwrap(),
+                        );
+                        //TODO: check if in redis
+                        if verify_key
+                            .verify_strict(secret.to_ne_bytes().as_slice(), &signature)
+                            .is_ok()
+                        {
+                            user.pub_key = Some(pub_key.to_owned());
+                        } else {
+                            tx.send(Message::Text(
+                                serde_json::json!({"type": "verified_failed"}).to_string(),
+                            ))
+                            .unwrap();
+                            continue;
+                        }
+
+                        let mut waiting_users = state.waiting_users.lock().await;
+
+                        if let Some(partner_user_id) = waiting_users.pop() {
+                            if let Some(partner_user) = all_users.get(&partner_user_id) {
+                                let user = all_users.get(&user_id).unwrap();
+                                let seed = rand_core::RngCore::next_u32(&mut csprng);
+                                let time = std::time::SystemTime::now()
+                                    .duration_since(std::time::UNIX_EPOCH)
+                                    .unwrap()
+                                    .as_secs();
+                                let signature = state
+                                    .dice_seed_signing_keys
+                                    .lock()
+                                    .await
+                                    .sign(format!("{seed}:{time}").as_bytes());
+                                partner_user
                                 .sender
                                 .send(Message::Text(
                                     serde_json::json!({
                                         "type": "paired",
                                         "public_key": partner_user.pub_key,
-                                        "private_key": partner_user.priv_key,
-                                        "partner_key": pub_key,
+                                        "partner_key": user.pub_key,
                                         "initiator": false,
                                         "seed": seed,
                                         "signature": STANDARD_NO_PAD.encode(signature.to_bytes()),
@@ -128,24 +213,26 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                                     .to_string(),
                                 ))
                                 .unwrap();
-                            tx.send(Message::Text(
-                                serde_json::json!({"type": "paired",
-                                     "public_key": pub_key,
-                                     "private_key": priv_key,
-                                     "partner_key": partner_user.pub_key,
-                                     "initiator": true,
-                                     "seed": seed,
-                                     "signature": STANDARD_NO_PAD.encode(signature.to_bytes()),
-                                     "time": time
-                                })
-                                .to_string(),
-                            ))
-                            .unwrap();
-                            all_users.get_mut(&partner_user_id).unwrap().partner_id = Some(user_id);
-                            all_users.get_mut(&user_id).unwrap().partner_id = Some(partner_user_id);
+                                tx.send(Message::Text(
+                                    serde_json::json!({"type": "paired",
+                                         "public_key": user.pub_key,
+                                         "partner_key": partner_user.pub_key,
+                                         "initiator": true,
+                                         "seed": seed,
+                                         "signature": STANDARD_NO_PAD.encode(signature.to_bytes()),
+                                         "time": time
+                                    })
+                                    .to_string(),
+                                ))
+                                .unwrap();
+                                all_users.get_mut(&partner_user_id).unwrap().partner_id =
+                                    Some(user_id);
+                                all_users.get_mut(&user_id).unwrap().partner_id =
+                                    Some(partner_user_id);
+                            }
+                        } else {
+                            waiting_users.push(user_id);
                         }
-                    } else {
-                        waiting_users.push(user_id);
                     }
                 }
                 Some("ice-candidate") | Some("offer") | Some("answer") => {
