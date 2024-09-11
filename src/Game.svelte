@@ -11,6 +11,7 @@
   import Dice6 from "./icons/dices/Dice6.svelte";
   import Dice0 from "./icons/dices/Dice0.svelte";
 
+
   const boardSize = {
       width: 3,
       height: 3,
@@ -81,7 +82,6 @@
                 priv_key = private_key;
                 break;
               case "paired":
-                  starting = message.initiator
                   game = new Game(
                       pub_key,
                       priv_key,
@@ -120,8 +120,8 @@
           }
       };
   }
-
-  function initializePeerConnection(isInitiator) {
+async  function initializePeerConnection(isInitiator) {
+    console.log("INit peer connection")
       peerConnection = new RTCPeerConnection({
           iceServers: [{
                     'urls': [
@@ -133,6 +133,8 @@
       });
 
       peerConnection.onicecandidate = (event) => {
+        console.log("Sending icecandidate!!!")
+        console.log(event)
           if (event.candidate) {
               ws.send(
                   JSON.stringify({
@@ -142,6 +144,9 @@
               );
           }
       };
+      peerConnection.addEventListener("icecandidate", (event) => {
+        console.log("Sending icecandidate!!!", "event handler!!!")
+      })
 
       console.log(peerConnection)
       ;
@@ -150,22 +155,20 @@
         console.log("connectionstatechange", event);
       })
       if (isInitiator) {
-          dataChannel = peerConnection.createDataChannel("chat");
-          setupDataChannel();
+        console.log("Creating datachannel")
+        dataChannel = peerConnection.createDataChannel("chat");
+        setupDataChannel();
 
-          peerConnection
-              .createOffer()
-              .then((offer) => peerConnection.setLocalDescription(offer))
-              .then(() => {
-                  ws.send(
-                      JSON.stringify({
-                          type: "offer",
-                          offer: peerConnection.localDescription,
-                      })
-                  );
-      console.log(peerConnection)
+        const offer = await peerConnection.createOffer();
+        console.log("Offer", offer)
+        const answer = await peerConnection.setLocalDescription(offer);
 
-              });
+        ws.send(
+                JSON.stringify({
+                    type: "offer",
+                    offer: peerConnection.localDescription,
+                })
+            );
       } else {
           peerConnection.ondatachannel = (event) => {
               dataChannel = event.channel;
@@ -191,6 +194,7 @@
   function setupDataChannel() {
       dataChannel.onopen = () => {
           console.log("Opened");
+          ws.close()
       };
 
       dataChannel.onmessage = (event) => {
@@ -244,18 +248,31 @@
     Game Completed:<br>
     Your score: {state?.points?.me?.reduce((a, b) => a + b, 0)}<br>
     Opponent score: {state?.points?.other?.reduce((a, b) => a + b, 0)}<br>
-    <button onclick={() => window.location.reload()}>Restart</button>
+    <button onclick={() => {
+        state.decks.me = undefined
+        state.decks.other = undefined
+        state.decks = undefined
+        state.points = undefined;
+        state = undefined;
+        gameInfo = undefined;
+        starting = false
+        dialog.close()
+        dataChannel.close()
+        peerConnection.close()
+        peerConnection = null!
+        dataChannel = null!
+    }}>Restart</button>
 </dialog>
 
 <div class="flex gap-4 mx-auto">
     <div class="ml-auto">
         Next dice {state?.next_dice}<br />
         Seq {state?.seq}<br />
-        Starting: {starting}<br />
+        Starting: {gameInfo?.initiator}<br />
         your turn: {state?.your_turn}<br />
         Completed: {state?.is_completed}<br />
-        Your id {gameInfo?.public_key.slice(0,5)}<br/>
-        Partner id {gameInfo?.partner_key.slice(0,5)}<br/>
+        Your id {gameInfo?.public_key?.slice(0,5)}<br/>
+        Partner id {gameInfo?.partner_key?.slice(0,5)}<br/>
 
         {#if state?.your_turn}
 
