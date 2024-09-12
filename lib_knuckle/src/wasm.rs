@@ -77,11 +77,23 @@ impl Game {
         )
     }
 
-    pub fn w_add_opponent_move(&mut self, data: Vec<u8>) {
+    pub fn w_add_opponent_move(&mut self, data: Vec<u8>) -> Option<String> {
         let item = bincode::deserialize::<HistoryItem>(&data);
 
-        self.add_opponent_move(item.unwrap());
+        match self.add_opponent_move(item.unwrap()) {
+            Err(e) => Some(e),
+            Ok(_) => None,
+        }
     }
+
+    pub fn w_test_place(&mut self, x: usize) -> Option<String> {
+        let item = self.test_place(x);
+        match item {
+            Err(e) => Some(e),
+            Ok(_) => None,
+        }
+    }
+
     pub fn w_place(&mut self, x: usize) -> Vec<u8> {
         let item = self.place(x);
         bincode::serialize(&item).unwrap()

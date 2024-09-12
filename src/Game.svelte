@@ -38,13 +38,16 @@
   let ws: WebSocket;
   let peerConnection: RTCPeerConnection;
   let dataChannel: RTCDataChannel;
-  let starting: boolean = $state(false);
   let dialog:HTMLDialogElement= $state();
+  let disconnectedDialog=$state();
+
+  let status:string|undefined =$state()
 
   let pub_key:string;
   let priv_key:string
 
   function startChat() {
+    status = "Starting Connection"
 
       if (
           import.meta.env.DEV) {
@@ -82,6 +85,7 @@
                 priv_key = private_key;
                 break;
               case "paired":
+                status = 'Verified'
                   game = new Game(
                       pub_key,
                       priv_key,
@@ -133,6 +137,7 @@ async  function initializePeerConnection(isInitiator) {
       });
 
       peerConnection.onicecandidate = (event) => {
+        status ="Getting further (ICE Candidate)"
         console.log("Sending icecandidate!!!")
         console.log(event)
           if (event.candidate) {
@@ -144,11 +149,8 @@ async  function initializePeerConnection(isInitiator) {
               );
           }
       };
-      peerConnection.addEventListener("icecandidate", (event) => {
-        console.log("Sending icecandidate!!!", "event handler!!!")
-      })
 
-      console.log(peerConnection)
+
       ;
       window.pc = peerConnection;
       peerConnection.addEventListener("connectionstatechange", (event) => {
@@ -193,9 +195,16 @@ async  function initializePeerConnection(isInitiator) {
 
   function setupDataChannel() {
       dataChannel.onopen = () => {
-          console.log("Opened");
           ws.close()
+          status =null;
       };
+
+      dataChannel.onclose = () => {
+        if (state == undefined || state?.is_completed) return;
+          status = "Connection closed"
+          disconnectedDialog.showModal()
+          console.log("Datachannel closed")
+      }
 
       dataChannel.onmessage = (event) => {
           console.log(event);
@@ -206,12 +215,24 @@ async  function initializePeerConnection(isInitiator) {
   }
 
   function resetChat() {
-      if (peerConnection) {
-          peerConnection.close();
-      }
-      if (dataChannel) {
-          dataChannel.close();
-      }
+    if(state.decks){
+        state.decks.me = undefined
+        state.decks.other = undefined
+
+    }
+    if(state) {
+        state.decks = undefined
+        state.points = undefined;
+
+    }
+    game.free()
+
+        state = undefined;
+        gameInfo = undefined;
+        dataChannel.close()
+        peerConnection.close()
+        peerConnection = null!
+        dataChannel = null!
 
   }
   $inspect(gameInfo)
@@ -249,20 +270,26 @@ async  function initializePeerConnection(isInitiator) {
     Your score: {state?.points?.me?.reduce((a, b) => a + b, 0)}<br>
     Opponent score: {state?.points?.other?.reduce((a, b) => a + b, 0)}<br>
     <button onclick={() => {
-        state.decks.me = undefined
-        state.decks.other = undefined
-        state.decks = undefined
-        state.points = undefined;
-        state = undefined;
-        gameInfo = undefined;
-        starting = false
-        dialog.close()
-        dataChannel.close()
-        peerConnection.close()
-        peerConnection = null!
-        dataChannel = null!
-    }}>Restart</button>
+       resetChat();
+       dialog.close();
+    }}>Return to start</button>
 </dialog>
+
+<dialog bind:this={disconnectedDialog}>
+    Your opponent disconnected, Please start a new game.
+    <button onclick={() => {
+       resetChat();
+       disconnectedDialog.close();
+    }}>Return to start</button>
+</dialog>
+
+{#if gameInfo}
+
+
+
+{#if status}
+    <span>{status}</span>
+{:else}
 
 <div class="flex gap-4 mx-auto">
     <div class="ml-auto">
@@ -282,13 +309,18 @@ async  function initializePeerConnection(isInitiator) {
         <svelte:component this={icons[state?.next_dice]} class="size-28 p-4" />
         {/if}
 
-        <button onclick={startChat}>Play</button>
     </div>
     <div class=" flex gap-8 flex-col mr-auto">
         <div class="grid grid-cols-3 gap-3">
             {@render diceLayout(state?.decks.me, state?.points?.me, (index:number) => {
             if(!state?.your_turn) {alert("Not your turn");return}
             if(state?.is_completed) {alert("Game is over!");return}
+            let pos = index % boardSize.width;
+            let error = game.w_test_place(pos);
+            if(error) {
+                alert(error);
+                return;
+            }
             const sending =   game.w_place(index % boardSize.width);
 
             dataChannel.send(
@@ -306,3 +338,9 @@ async  function initializePeerConnection(isInitiator) {
         </div>
     </div>
 </div>
+{/if}
+
+{:else}
+        <button onclick={startChat}>Play</button>
+
+{/if}
