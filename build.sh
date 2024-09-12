@@ -1,5 +1,5 @@
 #!/bin/bash
-cargo build --lib -p lib_knuckle --target wasm32-unknown-unknown
+cargo build --lib -p lib_knuckle --target wasm32-unknown-unknown --features debug
 wasm-bindgen ./target/wasm32-unknown-unknown/debug/lib_knuckle.wasm --target bundler --out-dir src/lib/wasmdev
 
 RUSTFLAGS="-Zlocation-detail=none" cargo +nightly build -Z build-std=std,panic_abort -Z build-std-features=panic_immediate_abort \

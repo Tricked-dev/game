@@ -1,4 +1,4 @@
 pub mod knucklebones_points;
 pub mod now_impl;
-pub mod occurences;
+pub(super) mod occurrences;
 pub mod signing_helpers;

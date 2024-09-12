@@ -1,5 +1,3 @@
-use base64::prelude::BASE64_STANDARD_NO_PAD;
-use base64::Engine;
 use ed25519::signature::SignerMut;
 use ed25519::Signature;
 use ed25519_dalek::Verifier;
@@ -11,7 +9,6 @@ use shift_columns::{shift_column_values, FloatDirection};
 #[allow(unused)]
 use std::time::{SystemTime, UNIX_EPOCH};
 use utils::knucklebones_points::calculate_knucklebones_points;
-use utils::occurences::count_occurrences;
 #[cfg(any(test, target_arch = "wasm32", feature = "wasm"))]
 use wasm_bindgen::prelude::wasm_bindgen;
 

@@ -1,7 +1,7 @@
 <script lang="ts">
   import {
       Game,
-      sign_message
+      sign_message,
   } from "./lib/wasmdev/lib_knuckle";
   import Dice1 from "./icons/dices/Dice1.svelte";
   import Dice2 from "./icons/dices/Dice2.svelte";
@@ -207,9 +207,10 @@ async  function initializePeerConnection(isInitiator) {
       }
 
       dataChannel.onmessage = (event) => {
+        let data = new Uint8Array(event.data);
           console.log(event);
-          console.log("Received Data", new Uint8Array(event.data))
-          game.w_add_opponent_move(new Uint8Array(event.data));
+          console.log("Received Data", data)
+          console.log(game.w_add_opponent_move(data));
           state = game.w_get_board_data();
       };
   }
@@ -225,7 +226,11 @@ async  function initializePeerConnection(isInitiator) {
         state.points = undefined;
 
     }
-    game.free()
+    try {
+        game.free()
+    } catch(e) {
+        // oh well
+    }
 
         state = undefined;
         gameInfo = undefined;
@@ -321,11 +326,9 @@ async  function initializePeerConnection(isInitiator) {
                 alert(error);
                 return;
             }
-            const sending =   game.w_place(index % boardSize.width);
-
-            dataChannel.send(
-            sending
-            );
+            const sending = game.w_place(index % boardSize.width);
+            console.log("Sending Bytes", sending)
+            dataChannel.send(sending);
             state = game.w_get_board_data();
             })}
 

@@ -22,6 +22,9 @@ macro_rules! console_log {
 
 #[wasm_bindgen]
 pub fn sign_message(key: String, message: String) -> String {
+    #[cfg(feature = "debug")]
+    console_error_panic_hook::set_once();
+
     let mut my_keys = signing_key_from_string(key).unwrap();
     let signature = my_keys.sign(message.as_bytes());
     let signature = signature.to_vec();
@@ -40,6 +43,9 @@ impl Game {
         starting: bool,
         seed: u64,
     ) -> Self {
+        #[cfg(feature = "debug")]
+        console_error_panic_hook::set_once();
+
         let my_keys = SigningKey::from_bytes(
             &BASE64_STANDARD_NO_PAD
                 .decode(my_key_priv)
@@ -78,9 +84,12 @@ impl Game {
     }
 
     pub fn w_add_opponent_move(&mut self, data: Vec<u8>) -> Option<String> {
-        let item = bincode::deserialize::<HistoryItem>(&data);
+        let item = match bincode::deserialize::<HistoryItem>(&data) {
+            Ok(item) => item,
+            Err(e) => return Some(e.to_string()),
+        };
 
-        match self.add_opponent_move(item.unwrap()) {
+        match self.add_opponent_move(item) {
             Err(e) => Some(e),
             Ok(_) => None,
         }
@@ -95,8 +104,16 @@ impl Game {
     }
 
     pub fn w_place(&mut self, x: usize) -> Vec<u8> {
-        let item = self.place(x);
-        bincode::serialize(&item).unwrap()
+        let item = self.place(x).unwrap();
+
+        let wasm = bincode::serialize(&item).unwrap();
+        console_log!("Sending Bytes {:?}", wasm);
+        console_log!("Sending Length {:?}", wasm.len());
+        console_log!(
+            "Reparse result: {:?}",
+            bincode::deserialize::<HistoryItem>(&wasm)
+        );
+        wasm
     }
 
     pub fn w_get_board_data(&self) -> JsValue {

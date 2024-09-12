@@ -1,4 +1,4 @@
-use super::occurences::count_occurrences;
+use super::occurrences::count_occurrences;
 
 pub(crate) fn calculate_knucklebones_points(board: &[u32], width: usize) -> Vec<u32> {
     let multiplication_table = [
