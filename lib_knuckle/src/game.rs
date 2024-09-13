@@ -214,6 +214,14 @@ impl Game {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(
+    any(test, target_arch = "wasm32", feature = "wasm"),
+    derive(tsify::Tsify)
+)]
+#[cfg_attr(
+    any(test, target_arch = "wasm32", feature = "wasm"),
+    tsify(into_wasm_abi, from_wasm_abi)
+)]
 pub struct BoardData {
     points: Points,
     decks: Decks,
@@ -226,18 +234,42 @@ pub struct BoardData {
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(
+    any(test, target_arch = "wasm32", feature = "wasm"),
+    derive(tsify::Tsify)
+)]
+#[cfg_attr(
+    any(test, target_arch = "wasm32", feature = "wasm"),
+    tsify(into_wasm_abi, from_wasm_abi)
+)]
 pub struct Points {
     me: Vec<u32>,
     other: Vec<u32>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(
+    any(test, target_arch = "wasm32", feature = "wasm"),
+    derive(tsify::Tsify)
+)]
+#[cfg_attr(
+    any(test, target_arch = "wasm32", feature = "wasm"),
+    tsify(into_wasm_abi, from_wasm_abi)
+)]
 pub struct Decks {
     me: Vec<u32>,
     other: Vec<u32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[cfg_attr(
+    any(test, target_arch = "wasm32", feature = "wasm"),
+    derive(tsify::Tsify)
+)]
+#[cfg_attr(
+    any(test, target_arch = "wasm32", feature = "wasm"),
+    tsify(into_wasm_abi, from_wasm_abi)
+)]
 pub struct HistoryItem {
     seq: u32,
     now: u64,

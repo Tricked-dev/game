@@ -2,6 +2,7 @@
   import {
       Game,
       sign_message,
+      type BoardData,
   } from "./lib/wasmdev/lib_knuckle";
   import Dice1 from "./icons/dices/Dice1.svelte";
   import Dice2 from "./icons/dices/Dice2.svelte";
@@ -10,19 +11,6 @@
   import Dice5 from "./icons/dices/Dice5.svelte";
   import Dice6 from "./icons/dices/Dice6.svelte";
   import Dice0 from "./icons/dices/Dice0.svelte";
-
-
-  const boardSize = {
-      width: 3,
-      height: 3,
-  };
-
-  let game: Game;
-  let gameInfo =$state()
-
-  let state = $state()
-
-  let backendUrl = import.meta.env.DEV ? "http://localhost:8083" : ``;
 
 
   const icons = [
@@ -35,13 +23,23 @@
       Dice6,
   ]
 
+  const boardSize = {
+      width: 3,
+      height: 3,
+  };
+  let backendUrl = import.meta.env.DEV ? "http://localhost:8083" : ``;
+
+  let game: Game;
+  let gameInfo:Record<string, string> = $state(null!)
+  let gameState: BoardData = $state(null!)
+
   let ws: WebSocket;
   let peerConnection: RTCPeerConnection;
   let dataChannel: RTCDataChannel;
-  let dialog:HTMLDialogElement= $state();
-  let disconnectedDialog=$state();
+  let dialog: HTMLDialogElement = $state(null!);
+  let disconnectedDialog:HTMLDialogElement=$state(null!);
 
-  let status:string|undefined =$state()
+  let status:string| undefined = $state()
 
   let pub_key:string;
   let priv_key:string
@@ -49,8 +47,7 @@
   function startChat() {
     status = "Starting Connection"
 
-      if (
-          import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
           ws = new WebSocket("ws://localhost:8083/ws");
       } else {
           ws = new WebSocket(`${window.origin.replace("http", "ws")}/ws`);
@@ -95,11 +92,11 @@
                       message.initiator,
                       BigInt(message.seed)
                   );
-                  state = await game.w_get_board_data();
+                  gameState = await game.w_get_board_data();
                   initializePeerConnection(message.initiator);
 
                   gameInfo = message;
-                
+
                   window.game = game;
 
                   // ws.close()
@@ -196,11 +193,11 @@ async  function initializePeerConnection(isInitiator) {
   function setupDataChannel() {
       dataChannel.onopen = () => {
           ws.close()
-          status =null;
+          status = undefined;
       };
 
       dataChannel.onclose = () => {
-        if (state == undefined || state?.is_completed) return;
+        if (gameState == undefined || gameState?.is_completed) return;
           status = "Connection closed"
           disconnectedDialog.showModal()
           console.log("Datachannel closed")
@@ -211,19 +208,19 @@ async  function initializePeerConnection(isInitiator) {
           console.log(event);
           console.log("Received Data", data)
           console.log(game.w_add_opponent_move(data));
-          state = game.w_get_board_data();
+          gameState = game.w_get_board_data();
       };
   }
 
   function resetChat() {
-    if(state.decks){
-        state.decks.me = undefined
-        state.decks.other = undefined
+    if(gameState.decks){
+        gameState.decks.me = undefined!
+        gameState.decks.other = undefined!
 
     }
-    if(state) {
-        state.decks = undefined
-        state.points = undefined;
+    if(gameState) {
+        gameState.decks = undefined!
+        gameState.points = undefined!;
 
     }
     try {
@@ -232,7 +229,7 @@ async  function initializePeerConnection(isInitiator) {
         // oh well
     }
 
-        state = undefined;
+        gameState = undefined!;
         gameInfo = undefined;
         dataChannel.close()
         peerConnection.close()
@@ -243,7 +240,7 @@ async  function initializePeerConnection(isInitiator) {
   $inspect(gameInfo)
 
   $effect(() => {
-    if(state?.is_completed) {
+    if(gameState?.is_completed) {
       dialog.showModal()
     }
   })
@@ -272,8 +269,8 @@ async  function initializePeerConnection(isInitiator) {
 
 <dialog bind:this={dialog}>
     Game Completed:<br>
-    Your score: {state?.points?.me?.reduce((a, b) => a + b, 0)}<br>
-    Opponent score: {state?.points?.other?.reduce((a, b) => a + b, 0)}<br>
+    Your score: {gameState?.points?.me?.reduce((a, b) => a + b, 0)}<br>
+    Opponent score: {gameState?.points?.other?.reduce((a, b) => a + b, 0)}<br>
     <button onclick={() => {
        resetChat();
        dialog.close();
@@ -298,28 +295,28 @@ async  function initializePeerConnection(isInitiator) {
 
 <div class="flex gap-4 mx-auto">
     <div class="ml-auto">
-        Next dice {state?.next_dice}<br />
-        Seq {state?.seq}<br />
+        Next dice {gameState?.next_dice}<br />
+        Seq {gameState?.seq}<br />
         Starting: {gameInfo?.initiator}<br />
-        your turn: {state?.your_turn}<br />
-        Completed: {state?.is_completed}<br />
+        your turn: {gameState?.your_turn}<br />
+        Completed: {gameState?.is_completed}<br />
         Your id {gameInfo?.public_key?.slice(0,5)}<br/>
         Partner id {gameInfo?.partner_key?.slice(0,5)}<br/>
 
-        {#if state?.your_turn}
+        {#if gameState?.your_turn}
 
         <!--TODO: fix this {@render icons[state?.next_dice]({
     class: "size-28 p-4"
         })} -->
-        <svelte:component this={icons[state?.next_dice]} class="size-28 p-4" />
+        <svelte:component this={icons[gameState?.next_dice]} class="size-28 p-4" />
         {/if}
 
     </div>
     <div class=" flex gap-8 flex-col mr-auto">
         <div class="grid grid-cols-3 gap-3">
-            {@render diceLayout(state?.decks.me, state?.points?.me, (index:number) => {
-            if(!state?.your_turn) {alert("Not your turn");return}
-            if(state?.is_completed) {alert("Game is over!");return}
+            {@render diceLayout(gameState?.decks.me, gameState?.points?.me, (index:number) => {
+            if(!gameState?.your_turn) {alert("Not your turn");return}
+            if(gameState?.is_completed) {alert("Game is over!");return}
             let pos = index % boardSize.width;
             let error = game.w_test_place(pos);
             if(error) {
@@ -329,13 +326,13 @@ async  function initializePeerConnection(isInitiator) {
             const sending = game.w_place(index % boardSize.width);
             console.log("Sending Bytes", sending)
             dataChannel.send(sending);
-            state = game.w_get_board_data();
+            gameState = game.w_get_board_data();
             })}
 
         </div>
         <span class="text-1xl font-semibold">Opponents layout: </span>
         <div class="grid grid-cols-3 gap-3 mx-auto">
-            {@render diceLayout(state?.decks.other, state?.points?.other, (index:number) => {
+            {@render diceLayout(gameState?.decks.other, gameState?.points?.other, (index:number) => {
             console.log("Tried clicking on other dice ", index)
             })}
         </div>
