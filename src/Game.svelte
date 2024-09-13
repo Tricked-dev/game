@@ -99,7 +99,7 @@
                   initializePeerConnection(message.initiator);
 
                   gameInfo = message;
-
+                
                   window.game = game;
 
                   // ws.close()

@@ -5,7 +5,8 @@ use ed25519_dalek::{SigningKey, VerifyingKey};
 use wasm_bindgen::prelude::wasm_bindgen;
 use wasm_bindgen::JsValue;
 
-use crate::{signing_key_from_string, Game, HistoryItem, ServerGameInfo};
+use crate::game::{Game, HistoryItem, ServerGameInfo};
+use crate::signing_key_from_string;
 
 #[wasm_bindgen]
 extern "C" {

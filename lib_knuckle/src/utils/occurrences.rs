@@ -19,4 +19,11 @@ mod tests {
         assert_eq!(map[&3], 2);
         assert_eq!(map[&4], 2);
     }
+
+    #[test]
+    fn test_count_occurrences_empty() {
+        let arr = vec![];
+        let map = count_occurrences(&arr);
+        assert_eq!(map.len(), 0);
+    }
 }

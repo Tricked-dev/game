@@ -20,3 +20,15 @@ cfg_if::cfg_if! {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_now() {
+        let now = now();
+        println!("now: {}", now);
+        assert!(now > 0);
+    }
+}
