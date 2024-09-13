@@ -102,18 +102,18 @@ fn test_game() {
             starting: false,
         };
         let mut game = Game::new(other_keys, my_keys.verifying_key(), deck_size, info);
-        game.add_opponent_move(mv);
+        game.add_opponent_move(mv).unwrap();
         game.place(1).unwrap()
     };
 
-    game.add_opponent_move(item);
+    game.add_opponent_move(item).unwrap();
 
     let info = game.get_board_data();
     let next = info.next_dice;
     assert_eq!(info.points.me, vec![0, 0, 2]);
     assert_eq!(info.points.other, vec![0, 3, 0]);
 
-    game.place(0);
+    game.place(0).unwrap();
     let info = game.get_board_data();
     assert_eq!(info.points.me[0], next as u32);
 }

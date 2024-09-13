@@ -74,11 +74,42 @@ pub struct Game {
     other_deck: Vec<u32>,
     seq: u32,
     dice: Dice,
-    my_keys: SigningKey,
-    other_keys: VerifyingKey,
     deck_size: (usize, usize),
     info: ServerGameInfo,
     verify: bool,
+    keys: Keys,
+}
+
+pub enum Keys {
+    VerifyOnly {
+        my_keys: VerifyingKey,
+        other_keys: VerifyingKey,
+    },
+    Sign {
+        my_keys: SigningKey,
+        other_keys: VerifyingKey,
+    },
+}
+
+impl Keys {
+    pub fn my_sign(&mut self) -> Option<&mut SigningKey> {
+        match self {
+            Keys::VerifyOnly { .. } => None,
+            Keys::Sign { my_keys, .. } => Some(my_keys),
+        }
+    }
+    pub fn my_verify(&self) -> &VerifyingKey {
+        match self {
+            Keys::VerifyOnly { my_keys, .. } => my_keys,
+            Keys::Sign { my_keys, .. } => my_keys.as_ref(),
+        }
+    }
+    pub fn other_verify(&self) -> &VerifyingKey {
+        match self {
+            Keys::VerifyOnly { other_keys, .. } => other_keys,
+            Keys::Sign { other_keys, .. } => other_keys,
+        }
+    }
 }
 
 impl Game {
@@ -98,8 +129,10 @@ impl Game {
             other_deck,
             seq: 0,
             dice,
-            my_keys,
-            other_keys,
+            keys: Keys::Sign {
+                my_keys,
+                other_keys,
+            },
             deck_size,
             info,
             verify: true,
@@ -152,7 +185,8 @@ impl Game {
         };
 
         let to_sign = Game::encode_history_item(&data);
-        let signature = self.my_keys.sign(&to_sign);
+        let key = self.keys.my_sign().unwrap();
+        let signature = key.sign(&to_sign);
         let mut signed_item = data.clone();
         signed_item.signature = signature.to_bytes().to_vec();
         Ok(signed_item)
@@ -170,9 +204,9 @@ impl Game {
         }
 
         let (public_key, deck) = if self.my_turn() {
-            (&self.my_keys.verifying_key(), &self.deck)
+            (&self.keys.my_verify(), &self.deck)
         } else {
-            (&self.other_keys, &self.other_deck)
+            (&self.keys.other_verify(), &self.other_deck)
         };
 
         if self.verify {
