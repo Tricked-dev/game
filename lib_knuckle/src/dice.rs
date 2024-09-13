@@ -26,3 +26,19 @@ impl Dice {
         self.next_dice = num
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_dice() {
+        let mut dice = Dice::new(0);
+        dice.set_next(1);
+        assert_eq!(dice.peek(), 1);
+        assert_eq!(dice.roll(), 1);
+        dice.set_next(2);
+        assert_eq!(dice.peek(), 2);
+        assert_eq!(dice.roll(), 2);
+    }
+}

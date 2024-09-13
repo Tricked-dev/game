@@ -24,12 +24,7 @@ pub struct Game {
 }
 
 impl Game {
-    pub fn new(
-        my_keys: SigningKey,
-        other_keys: VerifyingKey,
-        deck_size: (usize, usize),
-        info: ServerGameInfo,
-    ) -> Self {
+    pub fn new(keys: Keys, deck_size: (usize, usize), info: ServerGameInfo) -> Self {
         let deck = Self::create_deck(deck_size);
         let other_deck = Self::create_deck(deck_size);
         let dice = Dice::new(info.seed);
@@ -40,14 +35,31 @@ impl Game {
             other_deck,
             seq: 0,
             dice,
-            keys: Keys::Sign {
+            keys,
+            deck_size,
+            info,
+            verify: true,
+        }
+    }
+    pub fn validate_entire_game(
+        my_keys: VerifyingKey,
+        other_keys: VerifyingKey,
+        deck_size: (usize, usize),
+        info: ServerGameInfo,
+        history: Vec<HistoryItem>,
+    ) -> Result<(), String> {
+        let mut game = Game::new(
+            Keys::VerifyOnly {
                 my_keys,
                 other_keys,
             },
             deck_size,
             info,
-            verify: true,
+        );
+        for item in history {
+            game.add_opponent_move(item)?;
         }
+        Ok(())
     }
 
     pub fn disable_verify(&mut self) {
@@ -298,22 +310,29 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_is_completed() {
-        let arr = vec![1].into_iter().cycle().take(9).collect::<Vec<u32>>();
+    fn create_test_game(seed: u64) -> Game {
         let mut csprng = OsRng;
         let my_keys = SigningKey::generate(&mut csprng);
         let other_keys = SigningKey::generate(&mut csprng);
         let deck_size = (3, 3);
-        let mut game = Game::new(
-            my_keys,
-            other_keys.verifying_key(),
+        Game::new(
+            Keys::Sign {
+                my_keys,
+                other_keys: other_keys.verifying_key(),
+            },
             deck_size,
             ServerGameInfo {
-                seed: 0,
+                seed,
                 starting: true,
             },
-        );
+        )
+    }
+
+    #[test]
+    fn test_is_completed() {
+        let mut game = create_test_game(0);
+        let arr = vec![1].into_iter().cycle().take(9).collect::<Vec<u32>>();
+
         assert!(!game.get_board_data().is_completed);
         game.deck = arr.clone();
         assert!(game.get_board_data().is_completed);
@@ -331,8 +350,14 @@ mod tests {
             seed: 0,
             starting: true,
         };
-        let mut game =
-            Game::new(my_keys.clone(), other_keys.verifying_key(), deck_size, info);
+        let mut game = Game::new(
+            Keys::Sign {
+                my_keys: my_keys.clone(),
+                other_keys: other_keys.verifying_key(),
+            },
+            deck_size,
+            info,
+        );
         let info = game.get_board_data();
         assert_eq!(info.next_dice, 2);
         assert_eq!(info.deck_size, (3, 3));
@@ -345,8 +370,14 @@ mod tests {
                 seed: 0,
                 starting: false,
             };
-            let mut game =
-                Game::new(other_keys, my_keys.verifying_key(), deck_size, info);
+            let mut game = Game::new(
+                Keys::Sign {
+                    my_keys: other_keys,
+                    other_keys: my_keys.verifying_key(),
+                },
+                deck_size,
+                info,
+            );
             game.add_opponent_move(mv).unwrap();
             game.place(1).unwrap()
         };
@@ -365,70 +396,53 @@ mod tests {
 
     #[test]
     fn test_cascading_logic() {
-        // let mut csprng = OsRng;
-        // let my_keys = SigningKey::generate(&mut csprng);
-        // let other_keys = SigningKey::generate(&mut csprng);
-        // let deck_size = (3, 3);
-        // let info = ServerGameInfo {
-        //     seed: 0,
-        //     starting: true,
-        // };
-        // let mut game = Game {
-        //     deck: vec![0, 1, 1, 1, 1, 1, 1, 1, 1],
-        //     other_deck: vec![1, 1, 1, 1, 1, 1, 1, 1, 1],
-        //     deck_size,
-        //     history: vec![],
-        //     seq: 1,
-        //     dice: Dice::new(0),
-        //     my_keys,
-        //     other_keys: other_keys.verifying_key(),
-        //     info,
-        //     verify: false,
-        // };
+        let mut game = create_test_game(0);
+        game.disable_verify();
 
-        // game.mock_move(1, 0);
-        // let info = game.get_board_data();
-        // assert_eq!(info.decks.other[0], 0);
-        // assert_eq!(info.decks.other[3], 0);
-        // assert_eq!(info.decks.other[6], 0);
+        //TODO: in some future or slomething remove this if possible!
+        #[cfg_attr(rustfmt, rustfmt_skip)]
+        {
+            game.deck = vec![
+                1, 1, 1,
+                1, 1, 1,
+                1, 1, 0];
+            game.other_deck = vec![
+                0, 1, 1,
+                1, 1, 1,
+                1, 0, 0];
+        }
 
-        // game.mock_move(1, 0);
+        game.mock_move(1, 0);
+        let info = game.get_board_data();
+        assert_eq!(info.decks.me[0], 0);
+        assert_eq!(info.decks.me[3], 0);
+        assert_eq!(info.decks.me[6], 0);
 
-        // let info = game.get_board_data();
-        // assert_eq!(info.decks.me[0], 0);
-        // assert_eq!(info.decks.me[3], 0);
-        // assert_eq!(info.decks.me[6], 0);
+        game.mock_move(1, 0);
 
-        // game.other_deck[0] = 1;
-        // game.other_deck[3] = 2;
-        // game.other_deck[6] = 1;
+        let info = game.get_board_data();
+        assert_eq!(info.decks.other[0], 0);
+        assert_eq!(info.decks.other[3], 0);
+        assert_eq!(info.decks.other[6], 0);
 
-        // game.mock_move(1, 0);
+        game.deck[0] = 1;
+        game.deck[3] = 2;
+        game.deck[6] = 1;
 
-        // assert_eq!(game.other_deck[0], 2);
+        game.mock_move(1, 0);
 
-        // game.deck = vec![];
-        // game.other_deck = vec![];
-        // let info = game.get_board_data();
-        // assert!(info.is_completed);
+        //Floated upwards!
+        assert_eq!(game.deck[6], 2);
+
+        game.deck = vec![];
+        game.other_deck = vec![];
+        let info = game.get_board_data();
+        assert!(info.is_completed);
     }
 
     #[test]
     fn test_removing_numbers_logic() {
-        let mut csprng = OsRng;
-        let my_keys = SigningKey::generate(&mut csprng);
-        let other_keys = SigningKey::generate(&mut csprng);
-        let deck_size = (3, 3);
-        let mut game = Game::new(
-            my_keys,
-            other_keys.verifying_key(),
-            deck_size,
-            ServerGameInfo {
-                seed: 0,
-                starting: true,
-            },
-        );
-
+        let mut game = create_test_game(0);
         game.disable_verify();
 
         game.mock_move(1, 2);
@@ -445,21 +459,9 @@ mod tests {
 
     #[test]
     fn test_removing_numbers_logic2() {
-        let mut csprng = OsRng;
-        let my_keys = SigningKey::generate(&mut csprng);
-        let other_keys = SigningKey::generate(&mut csprng);
-        let deck_size = (3, 3);
-        let mut game = Game::new(
-            my_keys,
-            other_keys.verifying_key(),
-            deck_size,
-            ServerGameInfo {
-                seed: 0,
-                starting: true,
-            },
-        );
-
+        let mut game = create_test_game(0);
         game.disable_verify();
+
         game.mock_move(1, 0);
         game.mock_move(3, 1);
         game.debug_print_board();
@@ -479,16 +481,7 @@ mod tests {
 
     #[test]
     fn test_real_game() {
-        //427896094
-        let mut csprng = OsRng;
-        let my_keys = SigningKey::generate(&mut csprng);
-        let other_keys = SigningKey::generate(&mut csprng);
-        let deck_size = (3, 3);
-        let info = ServerGameInfo {
-            seed: 427896094,
-            starting: true,
-        };
-        let mut game = Game::new(my_keys, other_keys.verifying_key(), deck_size, info);
+        let mut game = create_test_game(427896094);
         game.disable_verify();
 
         game.mock_move_nodice(0);
@@ -512,15 +505,7 @@ mod tests {
 
     #[test]
     fn test_real_game2() {
-        let mut csprng = OsRng;
-        let my_keys = SigningKey::generate(&mut csprng);
-        let other_keys = SigningKey::generate(&mut csprng);
-        let deck_size = (3, 3);
-        let info = ServerGameInfo {
-            seed: 1282226401,
-            starting: true,
-        };
-        let mut game = Game::new(my_keys, other_keys.verifying_key(), deck_size, info);
+        let mut game = create_test_game(1282226401);
         game.disable_verify();
 
         game.mock_move_nodice(0);

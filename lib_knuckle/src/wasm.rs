@@ -5,6 +5,7 @@ use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
 use crate::{
     game::{Game, HistoryItem, ServerGameInfo},
+    keys::Keys,
     signing_key_from_string,
 };
 
@@ -77,8 +78,10 @@ impl Game {
         .unwrap();
 
         Self::new(
-            my_keys,
-            other_keys,
+            Keys::Sign {
+                my_keys,
+                other_keys,
+            },
             (deck_x, deck_y),
             ServerGameInfo { seed, starting },
         )
