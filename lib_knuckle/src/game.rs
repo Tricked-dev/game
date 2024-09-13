@@ -1,7 +1,4 @@
-use ed25519_dalek::Signature;
-use ed25519_dalek::Signer;
-use ed25519_dalek::Verifier;
-use ed25519_dalek::{SigningKey, VerifyingKey};
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
 #[cfg(any(test, target_arch = "wasm32", feature = "wasm"))]
 use wasm_bindgen::prelude::wasm_bindgen;
@@ -125,7 +122,8 @@ impl Game {
 
         if self.verify {
             let to_verify = Game::encode_history_item(item);
-            let signature = Signature::from_bytes(&item.signature.clone().try_into().unwrap());
+            let signature =
+                Signature::from_bytes(&item.signature.clone().try_into().unwrap());
 
             public_key
                 .verify(&to_verify, &signature)
@@ -333,7 +331,8 @@ mod tests {
             seed: 0,
             starting: true,
         };
-        let mut game = Game::new(my_keys.clone(), other_keys.verifying_key(), deck_size, info);
+        let mut game =
+            Game::new(my_keys.clone(), other_keys.verifying_key(), deck_size, info);
         let info = game.get_board_data();
         assert_eq!(info.next_dice, 2);
         assert_eq!(info.deck_size, (3, 3));
@@ -346,7 +345,8 @@ mod tests {
                 seed: 0,
                 starting: false,
             };
-            let mut game = Game::new(other_keys, my_keys.verifying_key(), deck_size, info);
+            let mut game =
+                Game::new(other_keys, my_keys.verifying_key(), deck_size, info);
             game.add_opponent_move(mv).unwrap();
             game.place(1).unwrap()
         };

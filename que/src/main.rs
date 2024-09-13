@@ -7,12 +7,11 @@ use axum::{
     Json, Router,
 };
 use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
-use bb8_redis::{bb8, redis::AsyncCommands, RedisConnectionManager};
+use bb8_redis::redis::AsyncCommands;
 use ed25519::{signature::SignerMut, Signature};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use embed::static_handler;
 use futures::{SinkExt, StreamExt};
-use http::Method;
 use rand_core::OsRng;
 use std::{collections::HashMap, sync::Arc, time::SystemTime};
 use tokio::{fs, sync::Mutex};
@@ -177,7 +176,8 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                             user.pub_key = Some(pub_key.to_owned());
                         } else {
                             tx.send(Message::Text(
-                                serde_json::json!({"type": "verified_failed"}).to_string(),
+                                serde_json::json!({"type": "verified_failed"})
+                                    .to_string(),
                             ))
                             .unwrap();
                             continue;
@@ -199,20 +199,20 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                                     .await
                                     .sign(format!("{seed}:{time}").as_bytes());
                                 partner_user
-                                .sender
-                                .send(Message::Text(
-                                    serde_json::json!({
-                                        "type": "paired",
-                                        "public_key": partner_user.pub_key,
-                                        "partner_key": user.pub_key,
-                                        "initiator": false,
-                                        "seed": seed,
-                                        "signature": STANDARD_NO_PAD.encode(signature.to_bytes()),
-                                        "time": time
-                                    })
-                                    .to_string(),
-                                ))
-                                .unwrap();
+                                    .sender
+                                    .send(Message::Text(
+                                        serde_json::json!({
+                                            "type": "paired",
+                                            "public_key": partner_user.pub_key,
+                                            "partner_key": user.pub_key,
+                                            "initiator": false,
+                                            "seed": seed,
+                                            "signature": STANDARD_NO_PAD.encode(signature.to_bytes()),
+                                            "time": time
+                                        })
+                                        .to_string(),
+                                    ))
+                                    .unwrap();
                                 tx.send(Message::Text(
                                     serde_json::json!({"type": "paired",
                                          "public_key": user.pub_key,

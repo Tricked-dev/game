@@ -1,14 +1,10 @@
 use axum::{
     async_trait,
-    extract::{FromRef, FromRequestParts, State},
+    extract::{FromRef, FromRequestParts},
     http::{request::Parts, StatusCode},
-    routing::get,
-    Router,
 };
 use bb8::{Pool, PooledConnection};
 use bb8_redis::RedisConnectionManager;
-use redis::AsyncCommands;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use bb8_redis::bb8;
 
@@ -24,7 +20,10 @@ where
 {
     type Rejection = (StatusCode, String);
 
-    async fn from_request_parts(_parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+    async fn from_request_parts(
+        _parts: &mut Parts,
+        state: &S,
+    ) -> Result<Self, Self::Rejection> {
         let pool = ConnectionPool::from_ref(state);
 
         let conn = pool.get_owned().await.map_err(internal_error)?;

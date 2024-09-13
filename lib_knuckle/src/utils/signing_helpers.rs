@@ -17,5 +17,6 @@ pub fn signature_from_string(key: &str) -> Option<Signature> {
     ))
 }
 pub fn verifying_key_from_string(key: &str) -> Option<VerifyingKey> {
-    VerifyingKey::from_bytes(&BASE64_STANDARD_NO_PAD.decode(key).ok()?.try_into().ok()?).ok()
+    VerifyingKey::from_bytes(&BASE64_STANDARD_NO_PAD.decode(key).ok()?.try_into().ok()?)
+        .ok()
 }

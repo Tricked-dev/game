@@ -7,9 +7,11 @@ pub fn shift_column_values(arr: &mut [u32], height: usize, direction: FloatDirec
     let width: usize = arr.len() / height;
 
     for col in 0..width {
-        let column_vals: Vec<u32> = (0..height).map(|row| arr[row * width + col]).collect();
+        let column_vals: Vec<u32> =
+            (0..height).map(|row| arr[row * width + col]).collect();
 
-        let mut non_zero_vals: Vec<u32> = column_vals.iter().cloned().filter(|&x| x != 0).collect();
+        let mut non_zero_vals: Vec<u32> =
+            column_vals.iter().cloned().filter(|&x| x != 0).collect();
 
         let zero_count = height - non_zero_vals.len();
         match direction {

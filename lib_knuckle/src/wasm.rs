@@ -1,12 +1,12 @@
-use base64::prelude::BASE64_STANDARD_NO_PAD;
-use base64::Engine;
+use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use ed25519::signature::SignerMut;
 use ed25519_dalek::{SigningKey, VerifyingKey};
-use wasm_bindgen::prelude::wasm_bindgen;
-use wasm_bindgen::JsValue;
+use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
-use crate::game::{Game, HistoryItem, ServerGameInfo};
-use crate::signing_key_from_string;
+use crate::{
+    game::{Game, HistoryItem, ServerGameInfo},
+    signing_key_from_string,
+};
 
 #[wasm_bindgen]
 extern "C" {
