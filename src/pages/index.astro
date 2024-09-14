@@ -1,5 +1,6 @@
 ---
 import Game from "../Game.svelte"
+import "@fontsource/pixelify-sans";
 ---
 
 <html lang="en">
@@ -10,7 +11,15 @@ import Game from "../Game.svelte"
 		<meta name="generator" content={Astro.generator} />
 		<title>Astro</title>
 	</head>
-	<body class="w-full p-4">
+	<body class="w-full h-full p-4">
 		<Game client:load />
+		<style is:global>
+			body,html {
+  				font-family: "Pixelify Sans";
+				min-width: 100vw;
+				min-height: 100vh;
+				background-image: url("/assets/background.png"), url("/assets/background2.png");
+			}
+		</style>
 	</body>
 </html>

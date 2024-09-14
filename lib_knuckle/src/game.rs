@@ -80,7 +80,7 @@ impl Game {
         self.play_move(data)
     }
 
-    pub fn place(&mut self, x: usize) -> Result<HistoryItem, String> {
+    pub fn place(&mut self, x: u16) -> Result<HistoryItem, String> {
         let signed_item = self.create_history_for_placing(x)?;
 
         self.seq += 1;
@@ -89,7 +89,7 @@ impl Game {
         Ok(signed_item)
     }
 
-    pub fn test_place(&mut self, x: usize) -> Result<(), String> {
+    pub fn test_place(&mut self, x: u16) -> Result<(), String> {
         let signed_item = self.create_history_for_placing(x)?;
         self.seq += 1;
         self.validate_move(&signed_item)?;
@@ -97,7 +97,7 @@ impl Game {
         Ok(())
     }
 
-    fn create_history_for_placing(&mut self, x: usize) -> Result<HistoryItem, String> {
+    fn create_history_for_placing(&mut self, x: u16) -> Result<HistoryItem, String> {
         let now = now();
 
         let data = HistoryItem {
@@ -143,22 +143,23 @@ impl Game {
         }
 
         let mut item_y = 0;
+        let item_x = item.x as usize;
         for i in 0..self.deck_size.0 {
-            if deck[item.x + i * self.deck_size.1] == 0 {
+            if deck[item_x + i * self.deck_size.1] == 0 {
                 item_y = i;
                 break;
             }
         }
 
-        let pos = item.x + item_y * self.deck_size.1;
+        let pos = item_x + item_y * self.deck_size.1;
         if deck[pos] != 0 {
             return Err(format!(
                 "Collision deck at {},{} already has a {}, seq {}",
-                item.x, item_y, deck[pos], self.seq
+                item_x, item_y, deck[pos], self.seq
             ));
         }
 
-        Ok((item.x, pos))
+        Ok((item_x, pos))
     }
 
     fn play_move(&mut self, item: HistoryItem) -> Result<(), String> {
@@ -273,7 +274,7 @@ pub struct Decks {
 pub struct HistoryItem {
     seq: u32,
     now: u64,
-    x: usize,
+    x: u16,
     signature: Vec<u8>,
 }
 
@@ -290,7 +291,7 @@ mod tests {
     use super::*;
 
     impl Game {
-        fn mock_move(&mut self, number: u8, x: usize) {
+        fn mock_move(&mut self, number: u8, x: u16) {
             self.dice.set_next(number);
             self.play_move(HistoryItem {
                 seq: self.seq,
@@ -302,7 +303,7 @@ mod tests {
             self.seq += 1;
         }
 
-        fn mock_move_nodice(&mut self, x: usize) {
+        fn mock_move_nodice(&mut self, x: u16) {
             self.play_move(HistoryItem {
                 seq: self.seq,
                 now: 0,

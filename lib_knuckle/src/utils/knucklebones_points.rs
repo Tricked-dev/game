@@ -62,6 +62,6 @@ mod tests {
         let points = calculate_knucklebones_points(&[0, 0, 0, 0, 0, 0, 0], 2);
         assert_eq!(points, vec![0, 0]);
         let points = calculate_knucklebones_points(&[7], 1);
-        assert_eq!(points, vec![]);
+        assert_eq!(points, Vec::<u32>::new());
     }
 }

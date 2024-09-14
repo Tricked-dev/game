@@ -4,24 +4,7 @@
       sign_message,
       type BoardData,
   } from "./lib/wasmdev/lib_knuckle";
-  import Dice1 from "./icons/dices/Dice1.svelte";
-  import Dice2 from "./icons/dices/Dice2.svelte";
-  import Dice3 from "./icons/dices/Dice3.svelte";
-  import Dice4 from "./icons/dices/Dice4.svelte";
-  import Dice5 from "./icons/dices/Dice5.svelte";
-  import Dice6 from "./icons/dices/Dice6.svelte";
-  import Dice0 from "./icons/dices/Dice0.svelte";
 
-
-  const icons = [
-      Dice0,
-      Dice1,
-      Dice2,
-      Dice3,
-      Dice4,
-      Dice5,
-      Dice6,
-  ]
 
   const boardSize = {
       width: 3,
@@ -244,37 +227,91 @@ async  function initializePeerConnection(isInitiator) {
       dialog.showModal()
     }
   })
+
+  let myPoints = $derived(
+     gameState?.points?.me?.reduce((a, b) => a + b, 0)
+  )
+  let otherPoints = $derived(
+     gameState?.points?.other?.reduce((a, b) => a + b, 0)
+  )
 </script>
 
 <svelte:options runes={true} ></svelte:options>
 
+{#snippet dice(number)}
+    <div class="relative w-full h-full">
+        {#if number != 0}
+            <img src="/assets/dices-base.png" alt="dice" class="absolute left-0 top-0 h-full w-full">
+            <img src="/assets/dices-{number}.png" alt="dice" class="absolute left-0 top-0 h-full w-full"
+            >
+        {/if}
+    </div>
+{/snippet}
+
 {#snippet diceLayout(deck, points, onclick)}
   {#each deck ?? [] as row, index}
     <button
-        class="size-10 flex justify-center bg-slate-600 text-white text-center text-3xl"
+        class="size-28 flex justify-center text-center text-3xl p-4"
         onclick={() => onclick(index)}
         ondrop={() => onclick(index)}
+        style:background-image="url(/assets/dice-bg.png)"
+        style:background-size="cover"
         >
-        <svelte:component this={icons[row]} />
+
+        {@render dice(row)}
+        <!-- <svelte:component this={icons[row]} /> -->
     </button>
   {/each}
   {#each points ?? [] as row}
+  <div class="flex justify-center">
     <div
-        class="size-10 flex justify-center bg-slate-900 text-white text-center text-3xl"
+        class="size-20 flex justify-center text-white text-center text-3xl"
+        style:background-image="url(/assets/number-base.png)"
+        style:background-size="cover"
+
         >
+        <div class="m-auto">
         {row}
+
+        </div>
     </div>
+  </div>
+
   {/each}
 {/snippet}
 
+<!-- <button onclick={() => dialog.showModal()}>End</button> -->
+
 <dialog bind:this={dialog}>
-    Game Completed:<br>
-    Your score: {gameState?.points?.me?.reduce((a, b) => a + b, 0)}<br>
-    Opponent score: {gameState?.points?.other?.reduce((a, b) => a + b, 0)}<br>
-    <button onclick={() => {
+    <div class="flex flex-col h-[50rem] w-[20rem]">
+    <img src="/assets/ending-base.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}">
+    {#if myPoints > otherPoints}
+        <img src="/assets/ending-win.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}">
+    {:else if myPoints < otherPoints}
+        <img src="/assets/ending-lose.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}">
+    {:else}
+        <img src="/assets/ending-draw.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}">
+    {/if}
+    <div class="w-full h-full z-10 absolute left-0 top-0 flex flex-col justify-center items-center">
+        <div class="ml-4 absolute left-0 top-48 text-5xl font-bold flex text-nowrap">
+            <img src="/assets/end-texts-your.png" class="h-10" alt="">: {gameState?.points?.me?.reduce((a, b) => a + b, 0)}
+        </div>
+        <div class="ml-4 absolute left-0 top-60 text-5xl font-bold flex text-nowrap">
+          <img src="/assets/end-texts-opponent.png" alt="" class="h-10">:  {gameState?.points?.other?.reduce((a, b) => a + b, 0)}
+        </div>
+        <div class="ml-4 absolute left-0 top-72 text-5xl font-bold flex terxt-nowrap">
+           <img src="/assets/end-texts-total.png" class="h-10" alt="">: {gameState?.seq}
+        </div>
+    <button class="mt-auto mx-auto mb-10" onclick={() => {
        resetChat();
        dialog.close();
-    }}>Return to start</button>
+    }}>
+    <img src="/assets/start-again.png" alt="" >
+    </button>
+    </div>
+
+    </div>
+
 </dialog>
 
 <dialog bind:this={disconnectedDialog}>
@@ -295,25 +332,29 @@ async  function initializePeerConnection(isInitiator) {
 
 <div class="flex gap-4 mx-auto">
     <div class="ml-auto">
-        Next dice {gameState?.next_dice}<br />
-        Seq {gameState?.seq}<br />
-        Starting: {gameInfo?.initiator}<br />
-        your turn: {gameState?.your_turn}<br />
-        Completed: {gameState?.is_completed}<br />
-        Your id {gameInfo?.public_key?.slice(0,5)}<br/>
-        Partner id {gameInfo?.partner_key?.slice(0,5)}<br/>
+        <!-- Next dice {gameState?.next_dice}<br /> -->
+        <!-- Seq {gameState?.seq}<br /> -->
+        <!-- Starting: {gameInfo?.initiator}<br /> -->
+        <!-- Your id {gameInfo?.public_key?.slice(0,5)}<br/> -->
+        <!-- Partner id {gameInfo?.partner_key?.slice(0,5)}<br/> -->
 
-        {#if gameState?.your_turn}
+        <div class="flex flex-col gap-4 justify-center">
+ {#if gameState?.your_turn}
+        <img src="/assets/turns-your.png">
+        <div class="size-28 mx-auto">
+        {@render dice(gameState?.next_dice)}
 
-        <!--TODO: fix this {@render icons[state?.next_dice]({
-    class: "size-28 p-4"
-        })} -->
-        <svelte:component this={icons[gameState?.next_dice]} class="size-28 p-4" />
+        </div>
+        {:else}
+
+        <img src="/assets/turns-other.png">
         {/if}
+        </div>
+
 
     </div>
     <div class=" flex gap-8 flex-col mr-auto">
-        <div class="grid grid-cols-3 gap-3">
+        <div class="grid grid-cols-3 gap-3 relative">
             {@render diceLayout(gameState?.decks.me, gameState?.points?.me, (index:number) => {
             if(!gameState?.your_turn) {alert("Not your turn");return}
             if(gameState?.is_completed) {alert("Game is over!");return}
@@ -331,7 +372,7 @@ async  function initializePeerConnection(isInitiator) {
 
         </div>
         <span class="text-1xl font-semibold">Opponents layout: </span>
-        <div class="grid grid-cols-3 gap-3 mx-auto">
+        <div class="grid grid-cols-3 gap-3 mx-auto relative">
             {@render diceLayout(gameState?.decks.other, gameState?.points?.other, (index:number) => {
             console.log("Tried clicking on other dice ", index)
             })}
@@ -341,6 +382,19 @@ async  function initializePeerConnection(isInitiator) {
 {/if}
 
 {:else}
-        <button onclick={startChat}>Play</button>
+<div class="w-full h-full flex justify-center items-center relative rounded-xl">
+    <div class="h-[40rem] w-[20rem] relative">
+        <img src="/assets/start-bg.png" alt="" class="absolute left-0 top-0 h-full w-full rounded-xl">
+        <div class="absolute left-0 top-0 h-full w-full flex flex-col justify-center items-center p-4">
+            <span class="text-4xl text-center font-semibold">KnuckleBones</span>
+            <span class="text-center">By Tricked</span>
+            <span>Rules:</span>
+            <span>Leaderboard:</span>
+            <button onclick={startChat} class="mt-auto">
+                <img src="/assets/start-btn.png" class="h-24" alt="">
+            </button>
+        </div>
 
+    </div>
+</div>
 {/if}

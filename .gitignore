@@ -26,3 +26,4 @@ target/
 wasmdev
 wasmprd
 server_seed
+deploy.sh

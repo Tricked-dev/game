@@ -99,7 +99,7 @@ impl Game {
         }
     }
 
-    pub fn w_test_place(&mut self, x: usize) -> Option<String> {
+    pub fn w_test_place(&mut self, x: u16) -> Option<String> {
         let item = self.test_place(x);
         match item {
             Err(e) => Some(e),
@@ -107,7 +107,7 @@ impl Game {
         }
     }
 
-    pub fn w_place(&mut self, x: usize) -> Vec<u8> {
+    pub fn w_place(&mut self, x: u16) -> Vec<u8> {
         let item = self.place(x).unwrap();
 
         let wasm = bincode::serialize(&item).unwrap();
