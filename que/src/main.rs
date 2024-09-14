@@ -28,7 +28,7 @@ struct User {
 }
 #[derive(Clone)]
 struct AppState {
-    waiting_users: Arc<Mutex<Vec<Uuid>>>,
+    queues: Arc<Mutex<HashMap<Uuid, Vec<Uuid>>>>,
     all_users: Arc<Mutex<HashMap<Uuid, User>>>,
     dice_seed_signing_keys: Arc<Mutex<SigningKey>>,
 }
@@ -66,7 +66,7 @@ async fn main() {
     };
 
     let app_state = AppState {
-        waiting_users: Arc::new(Mutex::new(Vec::new())),
+        queues: Arc::new(Mutex::new(HashMap::new())),
         all_users: Arc::new(Mutex::new(HashMap::new())),
         dice_seed_signing_keys: Arc::new(Mutex::new(dice_seed_signing_keys)),
     };
@@ -139,6 +139,8 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
         }
     });
 
+    let q = Uuid::nil();
+
     while let Some(Ok(message)) = receiver.next().await {
         if let Message::Text(text) = message {
             let data: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -184,7 +186,17 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                             continue;
                         }
 
-                        let mut waiting_users = state.waiting_users.lock().await;
+                        let mut queues = state.queues.lock().await;
+
+                        let mut waiting_users = queues.get_mut(&q);
+                        let waiting_users = match waiting_users {
+                            Some(waiting_users) => waiting_users,
+                            None => {
+                                queues.insert(q, Vec::new());
+                                waiting_users = queues.get_mut(&q);
+                                waiting_users.unwrap()
+                            }
+                        };
 
                         if let Some(partner_user_id) = waiting_users.pop() {
                             if let Some(partner_user) = all_users.get(&partner_user_id) {
@@ -273,7 +285,8 @@ async fn handle_socket(socket: WebSocket, state: AppState) {
                 .unwrap();
         }
     }
-
-    state.waiting_users.lock().await.retain(|&id| id != user_id);
+    let mut queues = state.queues.lock().await;
+    let q = queues.get_mut(&q).unwrap();
+    q.retain(|&id| id != user_id);
     state.all_users.lock().await.remove(&user_id);
 }

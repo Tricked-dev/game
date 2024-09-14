@@ -117,7 +117,8 @@ async  function initializePeerConnection(isInitiator) {
       });
 
       peerConnection.onicecandidate = (event) => {
-        status ="Getting further (ICE Candidate)"
+        const iceStatus = "Getting further (ICE Candidate)";
+        status = iceStatus;
         console.log("Sending icecandidate!!!")
         console.log(event)
           if (event.candidate) {
@@ -128,6 +129,15 @@ async  function initializePeerConnection(isInitiator) {
                   })
               );
           }
+
+          setTimeout(async() => {
+            if(status == iceStatus) {
+                status = "Seems like this is taking a bit too long, requeing"
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                resetChat();
+                startChat();
+            }
+          },5000)
       };
 
 
@@ -212,12 +222,16 @@ async  function initializePeerConnection(isInitiator) {
         // oh well
     }
 
-        gameState = undefined!;
-        gameInfo = undefined;
-        dataChannel.close()
-        peerConnection.close()
-        peerConnection = null!
-        dataChannel = null!
+    gameState = undefined!;
+    gameInfo = undefined;
+    try {
+    dataChannel.close()
+    }catch(e) {}
+    try {
+     peerConnection.close()
+    } catch(e) {}
+    peerConnection = null!
+    dataChannel = null!
 
   }
   $inspect(gameInfo)
@@ -241,8 +255,9 @@ async  function initializePeerConnection(isInitiator) {
 {#snippet dice(number)}
     <div class="relative w-full h-full">
         {#if number != 0}
-            <img src="/assets/dices-base.png" alt="dice" class="absolute left-0 top-0 h-full w-full">
+            <img src="/assets/dices-base.png" alt="dice" class="absolute left-0 top-0 h-full w-full" draggable="false">
             <img src="/assets/dices-{number}.png" alt="dice" class="absolute left-0 top-0 h-full w-full"
+            draggable="false"
             >
         {/if}
     </div>
@@ -252,8 +267,15 @@ async  function initializePeerConnection(isInitiator) {
   {#each deck ?? [] as row, index}
     <button
         class="size-28 flex justify-center text-center text-3xl p-4"
-        onclick={() => onclick(index)}
+        onclick={() => {
+            console.log("Dropped")
+            onclick(index)}}
         ondrop={() => onclick(index)}
+        ondragover={(event) => {
+
+          event.preventDefault();
+    event.dataTransfer!.dropEffect = 'copy';}}
+
         style:background-image="url(/assets/dice-bg.png)"
         style:background-size="cover"
         >
@@ -282,7 +304,7 @@ async  function initializePeerConnection(isInitiator) {
 
 <!-- <button onclick={() => dialog.showModal()}>End</button> -->
 
-<dialog bind:this={dialog}>
+<dialog bind:this={dialog} class="bg-transparent text-white">
     <div class="flex flex-col h-[50rem] w-[20rem]">
     <img src="/assets/ending-base.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}">
     {#if myPoints > otherPoints}
@@ -341,7 +363,13 @@ async  function initializePeerConnection(isInitiator) {
         <div class="flex flex-col gap-4 justify-center">
  {#if gameState?.your_turn}
         <img src="/assets/turns-your.png">
-        <div class="size-28 mx-auto">
+        <div class="size-28 mx-auto " draggable="true" ondragstart={() => {
+            console.log("Dragging")
+        }}
+    ondragend={() => {
+        console.log("Dragging ended")
+    }}
+         >
         {@render dice(gameState?.next_dice)}
 
         </div>
@@ -382,13 +410,20 @@ async  function initializePeerConnection(isInitiator) {
 {/if}
 
 {:else}
-<div class="w-full h-full flex justify-center items-center relative rounded-xl">
+<div class="w-full h-full flex justify-center items-center relative rounded-xl text-white">
     <div class="h-[40rem] w-[20rem] relative">
         <img src="/assets/start-bg.png" alt="" class="absolute left-0 top-0 h-full w-full rounded-xl">
         <div class="absolute left-0 top-0 h-full w-full flex flex-col justify-center items-center p-4">
             <span class="text-4xl text-center font-semibold">KnuckleBones</span>
             <span class="text-center">By Tricked</span>
-            <span>Rules:</span>
+            <span>Rules: <a class="underline hover:text-red-700 duration-150" href="https://cult-of-the-lamb.fandom.com/wiki/Knucklebones">As seen in the Cult Of Lamb Wiki</a></span>
+            <details class="w-full text-lg">
+                <summary class="w-full">TL;DR</summary>
+                <ul class="font-serif">
+                    <li>You get a dice and the more of the same dice you have in a row the more points you get</li>
+                    <li>All dices of the same number get removed from the other row if you place a dice</li>
+                </ul>
+            </details>
             <span>Leaderboard:</span>
             <button onclick={startChat} class="mt-auto">
                 <img src="/assets/start-btn.png" class="h-24" alt="">
