@@ -1,258 +1,249 @@
 <script lang="ts">
-  import {
-      Game,
-      sign_message,
-      type BoardData,
-  } from "./lib/wasmdev/lib_knuckle";
+import { Game, sign_message, type BoardData } from "./lib/wasmdev/lib_knuckle";
 
+const boardSize = {
+	width: 3,
+	height: 3,
+};
+let backendUrl = import.meta.env.DEV ? "http://localhost:8083" : '';
 
-  const boardSize = {
-      width: 3,
-      height: 3,
-  };
-  let backendUrl = import.meta.env.DEV ? "http://localhost:8083" : ``;
+let game: Game;
+let gameInfo: Record<string, string> = $state(null!);
+let gameState: BoardData = $state(null!);
 
-  let game: Game;
-  let gameInfo:Record<string, string> = $state(null!)
-  let gameState: BoardData = $state(null!)
+let ws: WebSocket;
+let peerConnection: RTCPeerConnection;
+let dataChannel: RTCDataChannel;
+let dialog: HTMLDialogElement = $state(null!);
+let disconnectedDialog: HTMLDialogElement = $state(null!);
 
-  let ws: WebSocket;
-  let peerConnection: RTCPeerConnection;
-  let dataChannel: RTCDataChannel;
-  let dialog: HTMLDialogElement = $state(null!);
-  let disconnectedDialog:HTMLDialogElement=$state(null!);
+let status: string | undefined = $state();
 
-  let status:string| undefined = $state()
+let pub_key: string;
+let priv_key: string;
 
-  let pub_key:string;
-  let priv_key:string
+function startChat() {
+	status = "Starting Connection";
 
-  function startChat() {
-    status = "Starting Connection"
+	if (import.meta.env.DEV) {
+		ws = new WebSocket("ws://localhost:8083/ws");
+	} else {
+		ws = new WebSocket(`${window.origin.replace("http", "ws")}/ws`);
+	}
 
-      if (import.meta.env.DEV) {
-          ws = new WebSocket("ws://localhost:8083/ws");
-      } else {
-          ws = new WebSocket(`${window.origin.replace("http", "ws")}/ws`);
-      }
+	ws.onopen = () => {};
 
-      ws.onopen = () => {
+	ws.onmessage = async (event) => {
+		let message:Record<string, any>;
 
-      };
-
-      ws.onmessage = async (event) => {
-          let message;
-
-          try {
-              message = JSON.parse(event.data);
-          } catch (e) {
-              const data = new TextDecoder().decode(await event.data.arrayBuffer());
-              message = JSON.parse(data);
-          }
-          console.log("WS MSG", message);
-          switch (message.type) {
-              case "verify":
-                let data = await fetch(`${backendUrl}/signup`)
-                let json = await data.json();
-                const private_key = json.priv_key;
-                const response = await sign_message(private_key, message.verify_time);
-               ws.send(JSON.stringify({
-                    type: "join",
-                    signature: response,
-                    pub_key: json.pub_key
-                }));
-                pub_key = json.pub_key;
-                priv_key = private_key;
-                break;
-              case "paired":
-                status = 'Verified'
-                  game = new Game(
-                      pub_key,
-                      priv_key,
-                      message.partner_key,
-                      boardSize.width,
-                      boardSize.height,
-                      message.initiator,
-                      BigInt(message.seed)
-                  );
-                  gameState = await game.w_get_board_data();
-                  initializePeerConnection(message.initiator);
-
-                  gameInfo = message;
-
-                  window.game = game;
-
-                  // ws.close()
-                  break;
-              case "offer":
-                  await handleOffer(message);
-                  break;
-              case "answer":
-                  await peerConnection.setRemoteDescription(
-                      new RTCSessionDescription(message.answer)
-                  );
-                  break;
-              case "ice-candidate":
-                  await peerConnection.addIceCandidate(
-                      new RTCIceCandidate(message.candidate)
-                  );
-                  break;
-              case "disconnected":
-                  // displayMessage("Your chat partner disconnected.");
-                  // resetChat();
-                  break;
-          }
-      };
-  }
-async  function initializePeerConnection(isInitiator) {
-    console.log("INit peer connection")
-      peerConnection = new RTCPeerConnection({
-          iceServers: [{
-                    'urls': [
-                        'stun:stun.l.google.com:19302',
-                        'stun:stun1.l.google.com:19302',
-                        'stun:stun2.l.google.com:19302',
-                    ]
-                }]
-      });
-
-      peerConnection.onicecandidate = (event) => {
-        const iceStatus = "Getting further (ICE Candidate)";
-        status = iceStatus;
-        console.log("Sending icecandidate!!!")
-        console.log(event)
-          if (event.candidate) {
-              ws.send(
-                  JSON.stringify({
-                      type: "ice-candidate",
-                      candidate: event.candidate,
-                  })
-              );
-          }
-
-          setTimeout(async() => {
-            if(status == iceStatus) {
-                status = "Seems like this is taking a bit too long, requeing"
-                await new Promise(resolve => setTimeout(resolve, 1500));
-                resetChat();
-                startChat();
+		try {
+			message = JSON.parse(event.data);
+		} catch (e) {
+			const data = new TextDecoder().decode(await event.data.arrayBuffer());
+			message = JSON.parse(data);
+		}
+		console.log("WS MSG", message);
+		switch (message.type) {
+			case "verify": {
+                const userInfo = !import.meta.env.DEV ? localStorage.getItem("userInfo") : null;
+				let json = userInfo ? JSON.parse(userInfo) : await fetch(`${backendUrl}/signup`).then(r => r.json());
+                localStorage.setItem("userInfo", JSON.stringify(json));
+				const private_key = json.priv_key;
+				const response = await sign_message(private_key, message.verify_time);
+				ws.send(
+					JSON.stringify({
+						type: "join",
+						signature: response,
+						pub_key: json.pub_key,
+					}),
+				);
+				pub_key = json.pub_key;
+				priv_key = private_key;
+				break;
             }
-          },5000)
-      };
+			case "paired":
+				status = "Verified";
+				game = new Game(
+					pub_key,
+					priv_key,
+					message.partner_key,
+					boardSize.width,
+					boardSize.height,
+					message.initiator,
+					BigInt(message.seed),
+				);
+				gameState = await game.w_get_board_data();
+				initializePeerConnection(message.initiator);
 
+				gameInfo = message;
 
-      ;
-      window.pc = peerConnection;
-      peerConnection.addEventListener("connectionstatechange", (event) => {
-        console.log("connectionstatechange", event);
-      })
-      if (isInitiator) {
-        console.log("Creating datachannel")
-        dataChannel = peerConnection.createDataChannel("chat");
-        setupDataChannel();
+				window.game = game;
 
-        const offer = await peerConnection.createOffer();
-        console.log("Offer", offer)
-        const answer = await peerConnection.setLocalDescription(offer);
+				// ws.close()
+				break;
+			case "offer":
+				await handleOffer(message as {offer:RTCSessionDescriptionInit});
+				break;
+			case "answer":
+				await peerConnection.setRemoteDescription(
+					new RTCSessionDescription(message.answer),
+				);
+				break;
+			case "ice-candidate":
+				await peerConnection.addIceCandidate(
+					new RTCIceCandidate(message.candidate),
+				);
+				break;
+			case "disconnected":
+				// displayMessage("Your chat partner disconnected.");
+				// resetChat();
+				break;
+		}
+	};
+}
+async function initializePeerConnection(isInitiator:boolean) {
+	console.log("INit peer connection");
+	peerConnection = new RTCPeerConnection({
+		iceServers: [
+			{
+				urls: [
+					"stun:stun.l.google.com:19302",
+					"stun:stun1.l.google.com:19302",
+					"stun:stun2.l.google.com:19302",
+				],
+			},
+		],
+	});
 
-        ws.send(
-                JSON.stringify({
-                    type: "offer",
-                    offer: peerConnection.localDescription,
-                })
-            );
-      } else {
-          peerConnection.ondatachannel = (event) => {
-              dataChannel = event.channel;
-              setupDataChannel();
-          };
-      }
-  }
+	peerConnection.onicecandidate = (event) => {
+		const iceStatus = "Getting further (ICE Candidate)";
+		status = iceStatus;
+		console.log("Sending icecandidate!!!");
+		console.log(event);
+		if (event.candidate) {
+			ws.send(
+				JSON.stringify({
+					type: "ice-candidate",
+					candidate: event.candidate,
+				}),
+			);
+		}
 
-  async function handleOffer(message) {
-      await peerConnection.setRemoteDescription(
-          new RTCSessionDescription(message.offer)
-      );
-      const answer = await peerConnection.createAnswer();
-      await peerConnection.setLocalDescription(answer);
-      ws.send(
-          JSON.stringify({
-              type: "answer",
-              answer: peerConnection.localDescription,
-          })
-      );
-  }
+		setTimeout(async () => {
+			if (status === iceStatus) {
+				status = "Seems like this is taking a bit too long, requeing";
+				await new Promise((resolve) => setTimeout(resolve, 1500));
+				resetChat();
+				startChat();
+			}
+		}, 5000);
+	};
+	window.pc = peerConnection;
+	peerConnection.addEventListener("connectionstatechange", (event) => {
+		console.log("connectionstatechange", event);
+	});
+	if (isInitiator) {
+		console.log("Creating datachannel");
+		dataChannel = peerConnection.createDataChannel("chat");
+		setupDataChannel();
 
-  function setupDataChannel() {
-      dataChannel.onopen = () => {
-          ws.close()
-          status = undefined;
-      };
+		const offer = await peerConnection.createOffer();
+		console.log("Offer", offer);
+		const answer = await peerConnection.setLocalDescription(offer);
 
-      dataChannel.onclose = () => {
-        if (gameState == undefined || gameState?.is_completed) return;
-          status = "Connection closed"
-          disconnectedDialog.showModal()
-          console.log("Datachannel closed")
-      }
+		ws.send(
+			JSON.stringify({
+				type: "offer",
+				offer: peerConnection.localDescription,
+			}),
+		);
+	} else {
+		peerConnection.ondatachannel = (event) => {
+			dataChannel = event.channel;
+			setupDataChannel();
+		};
+	}
+}
 
-      dataChannel.onmessage = (event) => {
-        let data = new Uint8Array(event.data);
-          console.log(event);
-          console.log("Received Data", data)
-          console.log(game.w_add_opponent_move(data));
-          gameState = game.w_get_board_data();
-      };
-  }
+async function handleOffer(message: {offer:RTCSessionDescriptionInit}) {
+	await peerConnection.setRemoteDescription(
+		new RTCSessionDescription(message.offer),
+	);
+	const answer = await peerConnection.createAnswer();
+	await peerConnection.setLocalDescription(answer);
+	ws.send(
+		JSON.stringify({
+			type: "answer",
+			answer: peerConnection.localDescription,
+		}),
+	);
+}
 
-  function resetChat() {
-    if(gameState.decks){
-        gameState.decks.me = undefined!
-        gameState.decks.other = undefined!
+function setupDataChannel() {
+	dataChannel.onopen = () => {
+		ws.close();
+		status = undefined;
+	};
 
-    }
-    if(gameState) {
-        gameState.decks = undefined!
-        gameState.points = undefined!;
+	dataChannel.onclose = () => {
+		if (gameState === undefined || gameState?.is_completed) return;
+		status = "Connection closed";
+		disconnectedDialog.showModal();
+		console.log("Datachannel closed");
+	};
 
-    }
-    try {
-        game.free()
-    } catch(e) {
-        // oh well
-    }
+	dataChannel.onmessage = (event) => {
+		let data = new Uint8Array(event.data);
+		console.log(event);
+		console.log("Received Data", data);
+		console.log(game.w_add_opponent_move(data));
+		gameState = game.w_get_board_data();
+	};
+}
 
-    gameState = undefined!;
-    gameInfo = undefined;
-    try {
-    dataChannel.close()
-    }catch(e) {}
-    try {
-     peerConnection.close()
-    } catch(e) {}
-    peerConnection = null!
-    dataChannel = null!
+function resetChat() {
+	if (gameState.decks) {
+		gameState.decks.me = undefined!;
+		gameState.decks.other = undefined!;
+	}
+	if (gameState) {
+		gameState.decks = undefined!;
+		gameState.points = undefined!;
+	}
+	try {
+		game.free();
+	} catch (e) {
+		// oh well
+	}
 
-  }
-  $inspect(gameInfo)
+	gameState = undefined!;
+	gameInfo = undefined!;
+	try {
+		dataChannel.close();
+	} catch (e) {}
+	try {
+		peerConnection.close();
+	} catch (e) {}
+	peerConnection = null!;
+	dataChannel = null!;
+}
+$inspect(gameInfo);
 
-  $effect(() => {
-    if(gameState?.is_completed) {
-      dialog.showModal()
-    }
-  })
+$effect(() => {
+	if (gameState?.is_completed) {
+		dialog.showModal();
+	}
+});
 
-  let myPoints = $derived(
-     gameState?.points?.me?.reduce((a, b) => a + b, 0)
-  )
-  let otherPoints = $derived(
-     gameState?.points?.other?.reduce((a, b) => a + b, 0)
-  )
+let myPoints = $derived(gameState?.points?.me?.reduce((a, b) => a + b, 0));
+let otherPoints = $derived(
+	gameState?.points?.other?.reduce((a, b) => a + b, 0),
+);
 </script>
 
 <svelte:options runes={true} ></svelte:options>
 
-{#snippet dice(number)}
+{#snippet dice(number: number)}
     <div class="relative w-full h-full">
         {#if number != 0}
             <img src="/assets/dices-base.png" alt="dice" class="absolute left-0 top-0 h-full w-full" draggable="false">
@@ -263,7 +254,7 @@ async  function initializePeerConnection(isInitiator) {
     </div>
 {/snippet}
 
-{#snippet diceLayout(deck, points, onclick)}
+{#snippet diceLayout(deck: number[], points: number[], onclick: any)}
   {#each deck ?? [] as row, index}
     <button
         class="size-28 flex justify-center text-center text-3xl p-4"
@@ -307,12 +298,12 @@ async  function initializePeerConnection(isInitiator) {
 <dialog bind:this={dialog} class="bg-transparent text-white">
     <div class="flex flex-col h-[50rem] w-[20rem]">
     <img src="/assets/ending-base.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}">
-    {#if myPoints > otherPoints}
+    {#if gameState?.winner.winner}
         <img src="/assets/ending-win.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}">
-    {:else if myPoints < otherPoints}
-        <img src="/assets/ending-lose.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}">
-    {:else}
+    {:else if gameState?.winner?.win_by_tie}
         <img src="/assets/ending-draw.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}">
+    {:else}
+        <img src="/assets/ending-lose.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}">
     {/if}
     <div class="w-full h-full z-10 absolute left-0 top-0 flex flex-col justify-center items-center">
         <div class="ml-4 absolute left-0 top-48 text-5xl font-bold flex text-nowrap">
@@ -362,7 +353,8 @@ async  function initializePeerConnection(isInitiator) {
 
         <div class="flex flex-col gap-4 justify-center">
  {#if gameState?.your_turn}
-        <img src="/assets/turns-your.png">
+        <img src="/assets/turns-your.png" alt="">
+        <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div class="size-28 mx-auto " draggable="true" ondragstart={() => {
             console.log("Dragging")
         }}
@@ -375,9 +367,18 @@ async  function initializePeerConnection(isInitiator) {
         </div>
         {:else}
 
-        <img src="/assets/turns-other.png">
+        <img src="/assets/turns-other.png" alt="">
         {/if}
         </div>
+
+        <button class="mt-auto mx-auto mb-10 mt-8" onclick={() => {
+            const sending = game.w_forfeit();
+            dataChannel.send(sending);
+
+            gameState = game.w_get_board_data();
+        }}>
+        <img src="/assets/turns-forfeit.png" alt="" >
+        </button>
 
 
     </div>

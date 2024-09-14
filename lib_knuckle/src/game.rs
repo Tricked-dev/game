@@ -66,7 +66,7 @@ impl Game {
         self.verify = false;
     }
 
-    fn encode_history_item(item: &HistoryItem) -> Vec<u8> {
+    pub(crate) fn encode_history_item(item: &HistoryItem) -> Vec<u8> {
         format!("{}:{}:{}", item.seq, item.now, item.x).into_bytes()
     }
 
@@ -161,8 +161,37 @@ impl Game {
 
         Ok((item_x, pos))
     }
+    pub fn forfeit(&mut self) -> HistoryItem {
+        let signed_item = self.create_history_for_placing(u16::MAX).unwrap();
+        self.seq += 1;
+        self.history.push(signed_item.clone());
+        signed_item
+    }
+
+    fn is_valid_signature(&self, item: &HistoryItem) -> Result<(), String> {
+        let signature = item.signature.clone();
+        let signature = signature.try_into().unwrap();
+        let signature = Signature::from_bytes(&signature);
+        let key = self.keys.my_verify();
+        let encoded = Self::encode_history_item(item);
+        match key.verify_strict(&encoded, &signature) {
+            Ok(_) => Ok(()),
+            Err(_) => {
+                match self.keys.other_verify().verify_strict(&encoded, &signature) {
+                    Ok(_) => Ok(()),
+                    Err(_) => Err("Invalid signature".to_string()),
+                }
+            }
+        }
+    }
 
     fn play_move(&mut self, item: HistoryItem) -> Result<(), String> {
+        if item.is_forfeit() {
+            if self.verify {
+                self.is_valid_signature(&item)?
+            }
+            return Ok(());
+        }
         let (item_x, pos) = self.validate_move(&item)?;
 
         let (deck, other_deck) = if self.my_turn() {
@@ -189,12 +218,20 @@ impl Game {
     }
 
     fn is_completed(&self) -> bool {
+        match self.history.last() {
+            Some(item) if item.is_forfeit() => return true,
+            _ => {}
+        }
         self.deck.iter().all(|c| *c != 0) || self.other_deck.iter().all(|c| *c != 0)
     }
 
     pub fn get_board_data(&self) -> BoardData {
         let player = self.seq % 2;
         let me_first = self.info.starting;
+        let me_points = calculate_knucklebones_points(&self.deck, self.deck_size.0);
+        let other_points =
+            calculate_knucklebones_points(&self.other_deck, self.deck_size.0);
+        let your_turn = !((me_first && player == 1) || (!me_first && player == 0));
         BoardData {
             points: Points {
                 me: calculate_knucklebones_points(&self.deck, self.deck_size.0),
@@ -208,10 +245,58 @@ impl Game {
             seq: self.seq,
             deck_size: self.deck_size,
             next_dice: self.dice.peek() as u8,
-            your_turn: !((me_first && player == 1) || (!me_first && player == 0)),
+            your_turn,
             is_completed: self.is_completed(),
+            winner: match self.history.last() {
+                Some(item) if item.is_forfeit() => {
+                    let to_verify = Game::encode_history_item(item);
+                    let signature = Signature::from_bytes(
+                        &item.signature.clone().try_into().unwrap(),
+                    );
+
+                    let is_from_me = self.keys.my_verify().verify(&to_verify, &signature);
+                    dbg!(&is_from_me);
+                    GameEnd {
+                        win_by_tie: false,
+                        win_by_forfeit: true,
+                        winner: is_from_me.is_err(),
+                    }
+                }
+                _ => match (me_points, other_points) {
+                    (me, other) if me > other => GameEnd {
+                        win_by_tie: false,
+                        win_by_forfeit: false,
+                        winner: true,
+                    },
+                    (other, me) if me < other => GameEnd {
+                        win_by_tie: false,
+                        win_by_forfeit: false,
+                        winner: false,
+                    },
+                    _ => GameEnd {
+                        win_by_tie: true,
+                        win_by_forfeit: false,
+                        winner: false,
+                    },
+                },
+            },
         }
     }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[cfg_attr(
+    any(test, target_arch = "wasm32", feature = "wasm"),
+    derive(tsify::Tsify)
+)]
+#[cfg_attr(
+    any(test, target_arch = "wasm32", feature = "wasm"),
+    tsify(into_wasm_abi, from_wasm_abi)
+)]
+struct GameEnd {
+    win_by_tie: bool,
+    win_by_forfeit: bool,
+    winner: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -232,6 +317,7 @@ pub struct BoardData {
     next_dice: u8,
     your_turn: bool,
     is_completed: bool,
+    winner: GameEnd,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -275,7 +361,13 @@ pub struct HistoryItem {
     seq: u32,
     now: u64,
     x: u16,
-    signature: Vec<u8>,
+    pub(crate) signature: Vec<u8>,
+}
+
+impl HistoryItem {
+    pub fn is_forfeit(&self) -> bool {
+        self.x == u16::MAX
+    }
 }
 
 #[derive(Debug)]
@@ -547,5 +639,23 @@ mod tests {
         game.mock_move_nodice(1);
         game.mock_move_nodice(0);
         game.mock_move_nodice(0);
+    }
+
+    #[test]
+    fn test_forfeit() {
+        let mut game = create_test_game(0);
+        game.disable_verify();
+        let item = game.forfeit();
+        assert_eq!(game.history.len(), 1);
+        assert!(game.history[0].is_forfeit());
+        assert!(!game.get_board_data().winner);
+        assert!(game.get_board_data().is_completed);
+        assert!(!game.get_board_data().your_turn);
+        let mut game2 = create_test_game(0);
+        game2.info.starting = false;
+        game2.disable_verify();
+        game2.add_opponent_move(item).unwrap();
+        assert!(game2.get_board_data().winner);
+        assert!(game2.get_board_data().is_completed);
     }
 }

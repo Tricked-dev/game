@@ -1,6 +1,6 @@
 use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
-use ed25519::signature::SignerMut;
-use ed25519_dalek::{SigningKey, VerifyingKey};
+use ed25519::{signature::SignerMut, Signature};
+use ed25519_dalek::{SigningKey, Verifier, VerifyingKey};
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
 use crate::{
@@ -109,6 +109,19 @@ impl Game {
 
     pub fn w_place(&mut self, x: u16) -> Vec<u8> {
         let item = self.place(x).unwrap();
+
+        let wasm = bincode::serialize(&item).unwrap();
+        console_log!("Sending Bytes {:?}", wasm);
+        console_log!("Sending Length {:?}", wasm.len());
+        console_log!(
+            "Reparse result: {:?}",
+            bincode::deserialize::<HistoryItem>(&wasm)
+        );
+        wasm
+    }
+
+    pub fn w_forfeit(&mut self) -> Vec<u8> {
+        let item = self.forfeit();
 
         let wasm = bincode::serialize(&item).unwrap();
         console_log!("Sending Bytes {:?}", wasm);

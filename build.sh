@@ -11,3 +11,4 @@ wasm-opt -Oz --optimize-for-js -o ./src/lib/wasmprd/lib_knuckle_bg.wasm ./src/li
 
 
 cd que && docker-compose up -d && cd ..
+pnpm build
