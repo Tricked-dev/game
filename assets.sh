@@ -14,6 +14,7 @@ ase2png background
 ase2png deck-bg
 ase2png start-btn
 ase2png start-bg
+ase2png waiting
 layerAse2png dices
 layerAse2png turns
 layerAse2png ending

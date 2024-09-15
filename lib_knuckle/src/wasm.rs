@@ -1,6 +1,6 @@
 use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
-use ed25519::{signature::SignerMut, Signature};
-use ed25519_dalek::{SigningKey, Verifier, VerifyingKey};
+use ed25519::signature::SignerMut;
+use ed25519_dalek::{SigningKey, VerifyingKey};
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
 use crate::{

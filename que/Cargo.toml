@@ -38,3 +38,4 @@ syn = "2.0.77"
 quote = "1.0.37"
 proc-macro2 = "1.0.86"
 axum_thiserror = "0.1.0"
+dashmap = { version = "6.1.0", features = ["serde"] }

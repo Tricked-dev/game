@@ -17,6 +17,9 @@ let peerConnection: RTCPeerConnection;
 let dataChannel: RTCDataChannel;
 let dialog: HTMLDialogElement = $state(null!);
 let disconnectedDialog: HTMLDialogElement = $state(null!);
+let waitingDialog: HTMLDialogElement = $state(null!);
+let kickedDialog: HTMLDialogElement = $state(null!);
+
 
 let status: string | undefined = $state();
 
@@ -24,6 +27,7 @@ let pub_key: string;
 let priv_key: string;
 
 function startChat() {
+	waitingDialog.showModal();
 	status = "Starting Connection";
 
 	if (import.meta.env.DEV) {
@@ -46,9 +50,9 @@ function startChat() {
 		console.log("WS MSG", message);
 		switch (message.type) {
 			case "verify": {
-                const userInfo = !import.meta.env.DEV ? sessionStorage.getItem("userInfo") : null;
+                const userInfo = import.meta.env.DEV ? localStorage.getItem("userInfo") : null;
 				let json = userInfo ? JSON.parse(userInfo) : await fetch(`${backendUrl}/signup`).then(r => r.json());
-                sessionStorage.setItem("userInfo", JSON.stringify(json));
+                localStorage.setItem("userInfo", JSON.stringify(json));
 				const private_key = json.priv_key;
 				const response = await sign_message(private_key, message.verify_time);
 				ws.send(
@@ -63,6 +67,7 @@ function startChat() {
 				break;
             }
 			case "paired":
+				waitingDialog.close();
 				status = "Verified";
 				game = new Game(
 					pub_key,
@@ -99,7 +104,17 @@ function startChat() {
 				// displayMessage("Your chat partner disconnected.");
 				// resetChat();
 				break;
+			case "disconnect":
+				waitingDialog.close();
+				kickedDialog.showModal();
+				break;
 		}
+	};
+
+	ws.onclose = () => {
+		if (gameState !== undefined) return;
+		waitingDialog.close();
+		kickedDialog.showModal();
 	};
 }
 async function initializePeerConnection(isInitiator:boolean) {
@@ -356,6 +371,17 @@ onMount(async () => {
        resetChat();
        disconnectedDialog.close();
     }}>Return to start</button>
+</dialog>
+
+<dialog bind:this={waitingDialog} class="bg-transparent text-white outline-none" >
+	<div class="flex flex-col z-50">
+    Waiting for a opponent to join.
+	<img src="/assets/waiting.png" alt="" class="" >
+	</div>
+</dialog>
+
+<dialog bind:this={kickedDialog} class="bg-transparent text-white outline-none" >
+    You were kicked from the game. This is probably because you joined the queue on another device/tab
 </dialog>
 
 {#if gameInfo}

@@ -3,14 +3,11 @@ use std::time::SystemTime;
 use axum::{
     extract::{
         ws::{Message, WebSocket},
-        State, WebSocketUpgrade,
+        WebSocketUpgrade,
     },
     Extension,
 };
-use base64::{
-    engine::general_purpose::STANDARD_NO_PAD,
-    prelude::{Engine, BASE64_STANDARD_NO_PAD},
-};
+use base64::{engine::general_purpose::STANDARD_NO_PAD, prelude::Engine};
 use ed25519_dalek::Signer;
 use futures::{SinkExt, StreamExt};
 use lib_knuckle::{signature_from_string, verifying_key_from_string};
@@ -27,6 +24,7 @@ pub async fn ws_handler(
     Extension(state): Extension<AppState>,
     DatabaseConnection(conn): DatabaseConnection,
 ) -> impl axum::response::IntoResponse {
+    dbg!("Got WS connection");
     ws.on_upgrade(|socket| handle_socket(socket, state, conn))
 }
 
@@ -41,13 +39,16 @@ pub async fn handle_socket(socket: WebSocket, state: AppState, conn: Conn) {
         partner_id: None,
         sender: tx.clone(),
         pub_key: None,
+        player_id: None,
     };
+
+    dbg!(&state.all_users);
     let secret = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap()
         .as_secs();
-    state.all_users.lock().await.insert(user_id, user);
-
+    state.all_users.insert(user_id, user);
+    dbg!("Sending Verify");
     sender
         .send(Message::Text(
             serde_json::to_string(&serde_json::json!({
@@ -69,73 +70,88 @@ pub async fn handle_socket(socket: WebSocket, state: AppState, conn: Conn) {
 
     let q = Uuid::nil();
 
-    while let Some(Ok(message)) = receiver.next().await {
+    'outer: while let Some(Ok(message)) = receiver.next().await {
         if let Message::Text(text) = message {
             let data: serde_json::Value = serde_json::from_str(&text).unwrap();
             match data["type"].as_str() {
                 Some("join") => {
-                    let mut all_users = state.all_users.lock().await;
-
-                    if let Some(user) = all_users.get_mut(&user_id) {
+                    dbg!("Getting all users");
+                    dbg!("Getting a user");
+                    if state.all_users.contains_key(&user_id) {
                         let signature = data["signature"].as_str().unwrap();
                         let pub_key = data["pub_key"].as_str().unwrap();
+                        {
+                            let mut user = state.all_users.get_mut(&user_id).unwrap();
 
-                        dbg!(&data, &text);
+                            dbg!(&data, &text);
 
-                        let verify_key = verifying_key_from_string(pub_key);
-                        let signature = signature_from_string(signature);
+                            let verify_key = verifying_key_from_string(pub_key);
+                            let signature = signature_from_string(signature);
 
-                        let (verify_key, signature) = match (verify_key, signature) {
-                            (Some(verify_key), Some(signature)) => {
-                                (verify_key, signature)
-                            }
-                            _ => {
+                            let (verify_key, signature) = match (verify_key, signature) {
+                                (Some(verify_key), Some(signature)) => {
+                                    (verify_key, signature)
+                                }
+                                _ => {
+                                    tx.send(Message::Text(
+                                        serde_json::json!({"type": "disconnect", "reason": "Missing Data"})
+                                            .to_string(),
+                                    ))
+                                    .unwrap();
+                                    break 'outer;
+                                }
+                            };
+
+                            //TODO: check if in redis
+                            if verify_key
+                                .verify_strict(secret.to_string().as_bytes(), &signature)
+                                .is_ok()
+                            {
+                                user.pub_key = Some(pub_key.to_owned());
+                            } else {
                                 tx.send(Message::Text(
-                                    serde_json::json!({"type": "verified_failed"})
-                                        .to_string(),
+                                    serde_json::json!({"type": "disconnect", "reason": "Invalid Signature"}).to_string(),
                                 ))
                                 .unwrap();
-                                continue;
+                                continue 'outer;
                             }
-                        };
-                        // let signature = Signature::from_bytes(
-                        //     STANDARD_NO_PAD
-                        //         .decode(signature)
-                        //         .unwrap()
-                        //         .as_slice()
-                        //         .try_into()
-                        //         .unwrap(),
-                        // );
-                        //TODO: check if in redis
-                        if verify_key
-                            .verify_strict(secret.to_string().as_bytes(), &signature)
-                            .is_ok()
-                        {
-                            user.pub_key = Some(pub_key.to_owned());
-                        } else {
-                            tx.send(Message::Text(
-                                serde_json::json!({"type": "verified_failed"})
-                                    .to_string(),
-                            ))
-                            .unwrap();
-                            continue;
                         }
 
-                        let mut queues = state.queues.lock().await;
+                        let data = conn
+                            .query_one(
+                                "SELECT player_id FROM players WHERE public_key = $1",
+                                &[&STANDARD_NO_PAD.decode(&pub_key).unwrap()],
+                            )
+                            .await
+                            .unwrap();
+                        dbg!("Getting user again");
+                        {
+                            let mut user = state.all_users.get_mut(&user_id).unwrap();
+                            dbg!("Success!");
+                            let id: Uuid = data.get(0);
+                            user.player_id = Some(id);
+                        }
 
-                        let mut waiting_users = queues.get_mut(&q);
-                        let waiting_users = match waiting_users {
+                        dbg!("Locking queues");
+
+                        let mut waiting_users = state.queues.get_mut(&q);
+                        let mut waiting_users = match waiting_users {
                             Some(waiting_users) => waiting_users,
                             None => {
-                                queues.insert(q, Vec::new());
-                                waiting_users = queues.get_mut(&q);
+                                state.queues.insert(q, Vec::new());
+                                waiting_users = state.queues.get_mut(&q);
                                 waiting_users.unwrap()
                             }
                         };
-
+                        dbg!("Locked queues");
+                        dbg!(&waiting_users);
                         if let Some(partner_user_id) = waiting_users.pop() {
-                            if let Some(partner_user) = all_users.get(&partner_user_id) {
-                                let user = all_users.get(&user_id).unwrap();
+                            drop(waiting_users);
+                            let partner_option =
+                                state.all_users.get_mut(&partner_user_id);
+                            if let Some(mut partner_user) = partner_option {
+                                let mut user = state.all_users.get_mut(&user_id).unwrap();
+                                dbg!(&user, &partner_user);
                                 let seed = rand_core::RngCore::next_u32(&mut csprng);
                                 let time = std::time::SystemTime::now()
                                     .duration_since(std::time::UNIX_EPOCH)
@@ -153,6 +169,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState, conn: Conn) {
                                         )
                                         .as_bytes(),
                                     );
+                                dbg!("Sending Paired");
                                 partner_user
                                     .sender
                                     .send(Message::Text(
@@ -168,6 +185,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState, conn: Conn) {
                                         .to_string(),
                                     ))
                                     .unwrap();
+                                dbg!("Sending User Text");
                                 tx.send(Message::Text(
                                     serde_json::json!({"type": "paired",
                                          "public_key": user.pub_key,
@@ -180,10 +198,9 @@ pub async fn handle_socket(socket: WebSocket, state: AppState, conn: Conn) {
                                     .to_string(),
                                 ))
                                 .unwrap();
-                                all_users.get_mut(&partner_user_id).unwrap().partner_id =
-                                    Some(user_id);
-                                all_users.get_mut(&user_id).unwrap().partner_id =
-                                    Some(partner_user_id);
+                                dbg!("Done sending user text");
+                                user.partner_id = Some(partner_user_id);
+                                partner_user.partner_id = Some(user_id);
                             }
                         } else {
                             waiting_users.push(user_id);
@@ -191,16 +208,9 @@ pub async fn handle_socket(socket: WebSocket, state: AppState, conn: Conn) {
                     }
                 }
                 Some("ice-candidate") | Some("offer") | Some("answer") => {
-                    let partner_id = state
-                        .all_users
-                        .lock()
-                        .await
-                        .get(&user_id)
-                        .unwrap()
-                        .partner_id;
+                    let partner_id = state.all_users.get(&user_id).unwrap().partner_id;
                     if let Some(partner_user_id) = partner_id {
-                        if let Some(partner_user) =
-                            state.all_users.lock().await.get(&partner_user_id)
+                        if let Some(partner_user) = state.all_users.get(&partner_user_id)
                         {
                             partner_user.sender.send(Message::Text(text)).unwrap();
                         }
@@ -210,15 +220,10 @@ pub async fn handle_socket(socket: WebSocket, state: AppState, conn: Conn) {
             }
         }
     }
-    let partner_id = state
-        .all_users
-        .lock()
-        .await
-        .get(&user_id)
-        .unwrap()
-        .partner_id;
+    println!("User {:?} disconnected", user_id);
+    let partner_id = state.all_users.get(&user_id).unwrap().partner_id;
     if let Some(partner_user_id) = partner_id {
-        if let Some(partner_user) = state.all_users.lock().await.get(&partner_user_id) {
+        if let Some(partner_user) = state.all_users.get(&partner_user_id) {
             partner_user
                 .sender
                 .send(Message::Text(
@@ -227,8 +232,8 @@ pub async fn handle_socket(socket: WebSocket, state: AppState, conn: Conn) {
                 .unwrap();
         }
     }
-    let mut queues = state.queues.lock().await;
-    let q = queues.get_mut(&q).unwrap();
-    q.retain(|&id| id != user_id);
-    state.all_users.lock().await.remove(&user_id);
+    if let Some(mut q) = state.queues.get_mut(&q) {
+        q.retain(|&id| id != user_id);
+    }
+    state.all_users.remove(&user_id);
 }

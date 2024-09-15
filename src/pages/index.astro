@@ -20,6 +20,9 @@ import "@fontsource/pixelify-sans";
 				min-height: 100vh;
 				background-image: url("/assets/background.png"), url("/assets/background2.png");
 			}
+			body:has(dialog[open]) {
+			 filter: blur(1px) brightness(0.8);
+			}
 		</style>
 	</body>
 </html>

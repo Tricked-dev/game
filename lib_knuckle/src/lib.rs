@@ -1,3 +1,5 @@
+#![feature(stmt_expr_attributes)]
+
 mod shift_columns;
 #[cfg(any(test, target_arch = "wasm32", feature = "wasm"))]
 mod wasm;

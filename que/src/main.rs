@@ -1,40 +1,35 @@
-use async_trait::async_trait;
 use axum::{
-    extract::{
-        ws::{Message, WebSocket, WebSocketUpgrade},
-        State,
-    },
+    extract::ws::Message,
     routing::{get, post},
     Extension, Json, Router,
 };
 use axum_thiserror::ErrorStatus;
 use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
-use bb8::{Pool, PooledConnection};
+use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
-use ed25519_dalek::{SigningKey, VerifyingKey};
+use dashmap::DashMap;
+use ed25519_dalek::SigningKey;
 use embed::static_handler;
-use futures::{SinkExt, StreamExt};
 use http::{
     header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE},
     HeaderValue, StatusCode,
 };
 use lib_knuckle::{
     api_interfaces::{GameBody, LeaderBoard, LeaderBoardEntry},
-    game::{Game, GameEnd, HistoryItem, ServerGameInfo},
+    game::{Game, GameEnd, ServerGameInfo},
     keys::Keys,
     signature_from_string, verifying_key_from_string,
 };
 use pool_extractor::DatabaseConnection;
 use rand_core::OsRng;
 use routes::websocket::ws_handler;
-use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, sync::Arc, time::SystemTime};
+use std::{collections::HashMap, sync::Arc};
 use thiserror::Error;
 use tokio::{fs, signal, sync::Mutex};
 use tokio_postgres::NoTls;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tracing_subscriber::layer::SubscriberExt;
-use uuid::{ContextV7, NoContext, Timestamp, Uuid};
+use uuid::{ContextV7, Timestamp, Uuid};
 
 mod database;
 mod embed;
@@ -66,15 +61,17 @@ pub enum UserCreateError {
     PoolError(#[from] bb8::RunError<tokio_postgres::Error>),
 }
 
+#[derive(Clone, Debug)]
 struct User {
     partner_id: Option<Uuid>,
     sender: tokio::sync::mpsc::UnboundedSender<Message>,
     pub_key: Option<String>,
+    player_id: Option<Uuid>,
 }
 #[derive(Clone)]
 struct AppState {
-    queues: Arc<Mutex<HashMap<Uuid, Vec<Uuid>>>>,
-    all_users: Arc<Mutex<HashMap<Uuid, User>>>,
+    queues: Arc<DashMap<Uuid, Vec<Uuid>>>,
+    all_users: Arc<DashMap<Uuid, User>>,
     dice_seed_signing_keys: Arc<Mutex<SigningKey>>,
 }
 
@@ -150,8 +147,8 @@ async fn main() {
     };
 
     let app_state = AppState {
-        queues: Arc::new(Mutex::new(HashMap::new())),
-        all_users: Arc::new(Mutex::new(HashMap::new())),
+        queues: Arc::new(DashMap::new()),
+        all_users: Arc::new(DashMap::new()),
         dice_seed_signing_keys: Arc::new(Mutex::new(dice_seed_signing_keys)),
     };
 
@@ -250,7 +247,6 @@ ORDER BY
     let leader_board = leader_board
         .iter()
         .map(|row| {
-            dbg!(row);
             let name: &str = row.get(0);
             let total_points: i64 = row.get(1);
             let total_games: i64 = row.get(2);
