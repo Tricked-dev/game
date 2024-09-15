@@ -277,14 +277,53 @@ onMount(async () => {
 	leaderboardData = await fetch(`${backendUrl}/leaderboard`).then(r => r.json());
 });
 
+
+function formatIntoColumnsCountPerColumn(arr:number[], width:number) {
+    if (width <= 0 || !arr || arr.length === 0) return [];
+    
+    const result: Record<string|number, number>[] = new Array(width).fill(null).map(() => ({}));
+    const height = Math.ceil(arr.length / width);
+
+    for (let i = 0; i < arr.length; i++) {
+        const col = i % width;
+        const value = arr[i];
+        if (result[col][value]) {
+            result[col][value]++;
+        } else {
+            result[col][value] = 1;
+        }
+    }
+    
+    return result;
+}
+
+let highLightsMine = $derived(formatIntoColumnsCountPerColumn(gameState?.decks.me ?? [], 3));
+let highLightsOther = $derived(formatIntoColumnsCountPerColumn(gameState?.decks.other ?? [], 3));
+
+$effect(() => {
+	console.log({...highLightsMine});
+	console.log({...highLightsOther});
+});
+
 </script>
 
 <svelte:options runes={true} ></svelte:options>
 
-{#snippet dice(number: number)}
+{#snippet dice(number: number, occurrences: number)}
+<style>
+	.glow-yellow {
+    filter: drop-shadow(0 0 10px yellow);
+}
+
+.glow-red {
+    filter: drop-shadow(0 0 10px red);
+}
+</style>
+{@const color = occurrences == 2 ? "glow-yellow" : occurrences == 3 ? "glow-red" : ""}
     <div class="relative w-full h-full">
+
         {#if number != 0}
-            <img src="/assets/dices-base.png" alt="dice" class="absolute left-0 top-0 h-full w-full" draggable="false">
+            <img src="/assets/dices-base.png" alt="dice" class="absolute left-0 top-0 h-full w-full {color}" draggable="false">
             <img src="/assets/dices-{number}.png" alt="dice" class="absolute left-0 top-0 h-full w-full"
             draggable="false"
             >
@@ -292,8 +331,9 @@ onMount(async () => {
     </div>
 {/snippet}
 
-{#snippet diceLayout(deck: number[], points: number[], onclick: any)}
+{#snippet diceLayout(deck: number[], points: number[], highLights: ReturnType<typeof formatIntoColumnsCountPerColumn>, onclick: any)}
   {#each deck ?? [] as row, index}
+     {@const occurrences = highLights[(index % 3)]?.[row] ?? 0}
     <button
         class="size-28 flex justify-center text-center text-3xl p-4 {row == 0 ? 'hover:brightness-110' : ""}"
         onclick={() => {
@@ -308,8 +348,7 @@ onMount(async () => {
         style:background-image="url(/assets/dice-bg.png)"
         style:background-size="cover"
         >
-
-        {@render dice(row)}
+        {@render dice(row, occurrences)}
         <!-- <svelte:component this={icons[row]} /> -->
     </button>
   {/each}
@@ -439,7 +478,7 @@ onMount(async () => {
     </div>
     <div class=" flex gap-8 flex-col mr-auto">
         <div class="grid grid-cols-3 gap-3 relative">
-            {@render diceLayout(gameState?.decks.me, gameState?.points?.me, (index:number) => {
+            {@render diceLayout(gameState?.decks.me, gameState?.points?.me, highLightsMine, (index:number) => {
             if(!gameState?.your_turn) {alert("Not your turn");return}
             if(gameState?.is_completed) {alert("Game is over!");return}
             let pos = index % boardSize.width;
@@ -457,7 +496,7 @@ onMount(async () => {
         </div>
         <span class="text-1xl font-semibold">Opponents layout: </span>
         <div class="grid grid-cols-3 gap-3 mx-auto relative">
-            {@render diceLayout(gameState?.decks.other, gameState?.points?.other, (index:number) => {
+            {@render diceLayout(gameState?.decks.other, gameState?.points?.other, highLightsOther, (index:number) => {
             console.log("Tried clicking on other dice ", index)
             })}
         </div>
