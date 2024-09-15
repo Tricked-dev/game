@@ -365,7 +365,7 @@ onMount(async () => {
 
 </dialog>
 
-<dialog bind:this={disconnectedDialog}>
+<dialog bind:this={disconnectedDialog} class="bg-transparent text-white">
     Your opponent disconnected, Please start a new game.
     <button onclick={() => {
        resetChat();
@@ -400,34 +400,40 @@ onMount(async () => {
         <!-- Your id {gameInfo?.public_key?.slice(0,5)}<br/> -->
         <!-- Partner id {gameInfo?.partner_key?.slice(0,5)}<br/> -->
 
-        <div class="flex flex-col gap-4 justify-center">
- {#if gameState?.your_turn}
-        <img src="/assets/turns-your.png" alt="">
+        <div class="flex flex-col justify-center">
+			<div class="">
+
+        <img src="/assets/turns-your.png" alt="" style:display={gameState?.your_turn ? "block" : "none"}>
+        <img src="/assets/turns-other.png" alt="" style:display={!gameState?.your_turn ? "block" : "none"}>
+
+		<button class="mx-auto mb-10 my-4" onclick={() => {
+            const sending = game.w_forfeit();
+            dataChannel.send(sending);
+
+            gameState = game.w_get_board_data();
+        }}>
+        	<img src="/assets/turns-forfeit.png" alt="" >
+        </button>
+			</div>
+			{#each [1,2,3,4,5,6] as i}
         <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="size-28 mx-auto " draggable="true" ondragstart={() => {
+        <div class="size-28 mx-auto " draggable="true"
+			style:display={(gameState?.your_turn && gameState?.next_dice==i) ? "block" : "none"}
+		ondragstart={() => {
             console.log("Dragging")
         }}
     ondragend={() => {
         console.log("Dragging ended")
     }}
          >
-        {@render dice(gameState?.next_dice)}
+        {@render dice(i)}
 
         </div>
-        {:else}
 
-        <img src="/assets/turns-other.png" alt="">
-        {/if}
+		{/each}
         </div>
 
-        <button class="mt-auto mx-auto mb-10 mt-8" onclick={() => {
-            const sending = game.w_forfeit();
-            dataChannel.send(sending);
 
-            gameState = game.w_get_board_data();
-        }}>
-        <img src="/assets/turns-forfeit.png" alt="" >
-        </button>
 
 
     </div>

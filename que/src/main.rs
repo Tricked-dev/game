@@ -272,6 +272,11 @@ async fn submit_game(
     Extension(state): Extension<AppState>,
     Json(body): Json<GameBody>,
 ) -> Result<String, UserCreateError> {
+    if body.your_key == body.opponent_key {
+        return Err(UserCreateError::BadRequest(
+            "Good luck playing against yourself :)".to_owned(),
+        ));
+    }
     let signature_to_check = match signature_from_string(&body.signature) {
         Some(signature) => signature,
         None => return Err(UserCreateError::InvalidSignature),
