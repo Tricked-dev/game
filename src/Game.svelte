@@ -295,7 +295,7 @@ onMount(async () => {
 {#snippet diceLayout(deck: number[], points: number[], onclick: any)}
   {#each deck ?? [] as row, index}
     <button
-        class="size-28 flex justify-center text-center text-3xl p-4"
+        class="size-28 flex justify-center text-center text-3xl p-4 {row == 0 ? 'hover:brightness-110' : ""}"
         onclick={() => {
             console.log("Dropped")
             onclick(index)}}
@@ -331,7 +331,7 @@ onMount(async () => {
   {/each}
 {/snippet}
 
-<!-- <button onclick={() => dialog.showModal()}>End</button> -->
+
 
 <dialog bind:this={dialog} class="bg-transparent text-white">
     <div class="flex flex-col h-[50rem] w-[20rem]">
@@ -357,7 +357,7 @@ onMount(async () => {
        resetChat();
        dialog.close();
     }}>
-    <img src="/assets/start-again.png" alt="" >
+    <img src="/assets/start-again.png" alt="" class="hover:brightness-110" >
     </button>
     </div>
 
@@ -412,7 +412,7 @@ onMount(async () => {
 
             gameState = game.w_get_board_data();
         }}>
-        	<img src="/assets/turns-forfeit.png" alt="" >
+        	<img src="/assets/turns-forfeit.png" alt="" class="hover:brightness-110" >
         </button>
 			</div>
 			{#each [1,2,3,4,5,6] as i}
@@ -471,7 +471,7 @@ onMount(async () => {
         <img src="/assets/start-bg.png" alt="" class="absolute left-0 top-0 h-full w-full rounded-xl">
         <div class="absolute left-0 top-0 h-full w-full flex flex-col justify-center items-center p-4">
             <span class="text-4xl text-center font-semibold">KnuckleBones</span>
-            <span class="text-center">By Tricked</span>
+            <a class="text-center" href="https://tricked.dev">By Tricked</a>
             <span>Rules: <a class="underline hover:text-red-700 duration-150" href="https://cult-of-the-lamb.fandom.com/wiki/Knucklebones">As seen in the Cult Of Lamb Wiki</a></span>
             <details class="w-full text-lg">
                 <summary class="w-full">TL;DR</summary>
@@ -489,7 +489,7 @@ onMount(async () => {
 				</ul>
 			</details>
 
-            <button onclick={startChat} class="mt-auto">
+            <button onclick={startChat} class="mt-auto hover:brightness-110">
                 <img src="/assets/start-btn.png" class="h-24" alt="">
             </button>
         </div>

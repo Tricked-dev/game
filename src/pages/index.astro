@@ -16,9 +16,10 @@ import "@fontsource/pixelify-sans";
 		<style is:global>
 			body,html {
   				font-family: "Pixelify Sans";
-				min-width: 100vw;
-				min-height: 100vh;
 				background-image: url("/assets/background.png"), url("/assets/background2.png");
+			}
+			body {
+				min-height: 100vh;
 			}
 			body:has(dialog[open]) {
 			 filter: blur(1px) brightness(0.8);
