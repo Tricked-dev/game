@@ -5,25 +5,20 @@ edition = "2021"
 
 [dependencies]
 base64.workspace = true
-ed25519.workspace = true
 ed25519-dalek.workspace = true
 rand_core.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 getrandom.workspace = true
 
-axum = { version = "0.7.5", features = ["ws"] }
+axum = { version = "0.7.5", features = ["macros", "ws"] }
 futures = "0.3.30"
 http = "1.1.0"
 mime_guess = "2.0.5"
 rust-embed = "8.5.0"
 tokio = { version = "1.40.0", features = ["full"] }
-uuid = { version = "1.10.0", features = ["serde", "v4"] }
-lib_knuckle = { path = "../lib_knuckle", default-features = false }
-
-bb8 = "0.7.1"
-bb8-redis = "0.14.0"
-redis = "0.24.0"
+uuid = { version = "1.10.0", features = ["serde", "v4", "v7"] }
+lib_knuckle = { path = "../lib_knuckle", default-features = false, version = "0.1.0" }
 
 tracing-subscriber = { version = "0.3.18", features = [
     "parking_lot",
@@ -33,3 +28,13 @@ tracing-subscriber = { version = "0.3.18", features = [
 ] }
 tracing = "0.1.40"
 tower-http = { version = "0.5.2", features = ["cors"] }
+
+tokio-postgres = { version = "0.7.11", features = ["with-uuid-1"] }
+bb8-postgres = "0.8.1"
+bb8 = "0.8.5"
+async-trait = "0.1.82"
+thiserror = "1.0.63"
+syn = "2.0.77"
+quote = "1.0.37"
+proc-macro2 = "1.0.86"
+axum_thiserror = "0.1.0"

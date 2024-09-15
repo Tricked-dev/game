@@ -8,6 +8,8 @@ pub mod game;
 mod utils;
 
 mod dice;
-mod keys;
+pub mod keys;
 
 pub use utils::signing_helpers::*;
+
+pub mod api_interfaces;

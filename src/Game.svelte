@@ -1,5 +1,6 @@
 <script lang="ts">
-import { Game, sign_message, type BoardData } from "./lib/wasmdev/lib_knuckle";
+  import { onMount } from "svelte";
+import { Game, sign_message, type BoardData ,type GameBody, type LeaderBoard} from "./lib/wasmdev/lib_knuckle";
 
 const boardSize = {
 	width: 3,
@@ -8,7 +9,7 @@ const boardSize = {
 let backendUrl = import.meta.env.DEV ? "http://localhost:8083" : '';
 
 let game: Game;
-let gameInfo: Record<string, string> = $state(null!);
+let gameInfo: Partial<GameBody> & {initiator: boolean} & {[key: string]: string} = $state(null!);
 let gameState: BoardData = $state(null!);
 
 let ws: WebSocket;
@@ -45,9 +46,9 @@ function startChat() {
 		console.log("WS MSG", message);
 		switch (message.type) {
 			case "verify": {
-                const userInfo = !import.meta.env.DEV ? localStorage.getItem("userInfo") : null;
+                const userInfo = !import.meta.env.DEV ? sessionStorage.getItem("userInfo") : null;
 				let json = userInfo ? JSON.parse(userInfo) : await fetch(`${backendUrl}/signup`).then(r => r.json());
-                localStorage.setItem("userInfo", JSON.stringify(json));
+                sessionStorage.setItem("userInfo", JSON.stringify(json));
 				const private_key = json.priv_key;
 				const response = await sign_message(private_key, message.verify_time);
 				ws.send(
@@ -232,13 +233,35 @@ $inspect(gameInfo);
 $effect(() => {
 	if (gameState?.is_completed) {
 		dialog.showModal();
+		(async () => {
+			const body: GameBody = {
+				seed: gameInfo!.seed! ,
+				time: gameInfo!.time! ,
+				your_key: gameInfo?.public_key!,
+				opponent_key: gameInfo?.partner_key!,
+				starting: gameInfo?.initiator!,
+				signature: gameInfo?.signature!,
+				moves: gameState.history,
+			};
+			console.log(body);
+			await fetch(`${backendUrl}/submit_game`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify(body),
+			});
+		})();
 	}
 });
 
-let myPoints = $derived(gameState?.points?.me?.reduce((a, b) => a + b, 0));
-let otherPoints = $derived(
-	gameState?.points?.other?.reduce((a, b) => a + b, 0),
-);
+
+let leaderboardData:LeaderBoard = $state(null!);
+
+onMount(async () => {
+	leaderboardData = await fetch(`${backendUrl}/leaderboard`).then(r => r.json());
+});
+
 </script>
 
 <svelte:options runes={true} ></svelte:options>
@@ -425,7 +448,15 @@ let otherPoints = $derived(
                     <li>All dices of the same number get removed from the other row if you place a dice</li>
                 </ul>
             </details>
-            <span>Leaderboard:</span>
+			<details class="w-full text-lg">
+				<summary class="w-full">Leaderboard</summary>
+				<ul class="font-serif max-h-80 overflow-y-scroll">
+					{#each (leaderboardData?.entries ?? []) as entry}
+						<li>{entry.name}: {entry.total_points} points, {entry.total_games} games, {entry.total_wins} wins</li>
+					{/each}
+				</ul>
+			</details>
+
             <button onclick={startChat} class="mt-auto">
                 <img src="/assets/start-btn.png" class="h-24" alt="">
             </button>

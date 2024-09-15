@@ -1,26 +1,71 @@
+use async_trait::async_trait;
 use axum::{
     extract::{
         ws::{Message, WebSocket, WebSocketUpgrade},
         State,
     },
-    routing::get,
-    Json, Router,
+    routing::{get, post},
+    Extension, Json, Router,
 };
+use axum_thiserror::ErrorStatus;
 use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
-use bb8_redis::redis::AsyncCommands;
-use ed25519::{signature::SignerMut, Signature};
+use bb8::{Pool, PooledConnection};
+use bb8_postgres::PostgresConnectionManager;
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use embed::static_handler;
 use futures::{SinkExt, StreamExt};
+use http::{
+    header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE},
+    HeaderValue, StatusCode,
+};
+use lib_knuckle::{
+    api_interfaces::{GameBody, LeaderBoard, LeaderBoardEntry},
+    game::{Game, GameEnd, HistoryItem, ServerGameInfo},
+    keys::Keys,
+    signature_from_string, verifying_key_from_string,
+};
+use pool_extractor::DatabaseConnection;
 use rand_core::OsRng;
+use routes::websocket::ws_handler;
+use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, sync::Arc, time::SystemTime};
-use tokio::{fs, sync::Mutex};
-use tower_http::cors::{Any, CorsLayer};
+use thiserror::Error;
+use tokio::{fs, signal, sync::Mutex};
+use tokio_postgres::NoTls;
+use tower_http::cors::{AllowOrigin, Any, CorsLayer};
 use tracing_subscriber::layer::SubscriberExt;
-use uuid::Uuid;
+use uuid::{ContextV7, NoContext, Timestamp, Uuid};
 
+mod database;
 mod embed;
 mod pool_extractor;
+mod routes;
+
+#[derive(Error, Debug, ErrorStatus)]
+pub enum UserCreateError {
+    #[error("User {0} already exists")]
+    #[status(StatusCode::CONFLICT)]
+    UserAlreadyExists(String),
+    #[error("Invalid signature")]
+    #[status(StatusCode::BAD_REQUEST)]
+    InvalidSignature,
+    #[error("{0}")]
+    #[status(StatusCode::INTERNAL_SERVER_ERROR)]
+    Internal(String),
+    #[error("{0}")]
+    #[status(StatusCode::BAD_REQUEST)]
+    BadRequest(String),
+    #[error("Internal Database Error")]
+    #[status(StatusCode::INTERNAL_SERVER_ERROR)]
+    DatabaseError(#[from] tokio_postgres::Error),
+    #[error("Base64 Decode Error")]
+    #[status(StatusCode::BAD_REQUEST)]
+    Base64DecodeError(#[from] base64::DecodeError),
+    #[error("Pool Error")]
+    #[status(StatusCode::INTERNAL_SERVER_ERROR)]
+    PoolError(#[from] bb8::RunError<tokio_postgres::Error>),
+}
+
 struct User {
     partner_id: Option<Uuid>,
     sender: tokio::sync::mpsc::UnboundedSender<Message>,
@@ -33,6 +78,8 @@ struct AppState {
     dice_seed_signing_keys: Arc<Mutex<SigningKey>>,
 }
 
+pub type SharedContextV7 = Arc<Mutex<ContextV7>>;
+
 #[tokio::main]
 async fn main() {
     tracing_subscriber::registry()
@@ -43,17 +90,54 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer());
     tracing::debug!("connecting to redis");
 
-    // let manager = RedisConnectionManager::new("redis://localhost").unwrap();
-    // let pool = bb8::Pool::builder().build(manager).await.unwrap();
+    let manager = PostgresConnectionManager::new_from_stringlike(
+        "host=localhost user=postgres password=postgres",
+        NoTls,
+    )
+    .unwrap();
+    let pool = Pool::builder().build(manager).await.unwrap();
 
-    // {
-    //     // ping the database before starting
-    //     let mut conn = pool.get().await.unwrap();
-    //     // conn.set::<&str, &str, ()>("foo", "bar").await.unwrap();
-    //     let result: String = conn.get("foo").await.unwrap();
-    //     assert_eq!(result, "bar");
-    // }
-    tracing::debug!("successfully connected to redis and pinged it");
+    pool.get_owned()
+        .await
+        .unwrap()
+        .simple_query(
+            "
+      CREATE TABLE players (
+            player_id UUID PRIMARY KEY,
+            public_key BYTEA NOT NULL,
+            secret_key BYTEA NOT NULL,
+            name TEXT NOT NULL
+        );
+
+
+    ",
+        )
+        .await
+        .ok();
+    pool.get_owned()
+        .await
+        .unwrap()
+        .simple_query(
+            "
+  CREATE TABLE matches (
+            match_id UUID PRIMARY KEY,
+            seed BIGINT NOT NULL,
+            time BIGINT NOT NULL,
+            player1 UUID NOT NULL,
+            player2 UUID NOT NULL,
+            winner UUID,
+            result TEXT NOT NULL,
+            points_p1 SMALLINT NOT NULL,
+            points_p2 SMALLINT NOT NULL,
+            FOREIGN KEY (player1) REFERENCES players(player_id),
+            FOREIGN KEY (player2) REFERENCES players(player_id),
+            FOREIGN KEY (winner) REFERENCES players(player_id),
+            UNIQUE (seed, time)
+        );
+    ",
+        )
+        .await
+        .ok();
 
     let dice_seed_signing_keys = match fs::read("server_seed").await {
         Ok(data) => SigningKey::from_bytes(&data.try_into().unwrap()),
@@ -71,6 +155,8 @@ async fn main() {
         dice_seed_signing_keys: Arc::new(Mutex::new(dice_seed_signing_keys)),
     };
 
+    let uuid_clock = ContextV7::new();
+
     let app = Router::new()
         .route("/_astro/*file", get(static_handler))
         .route("/assets/*file", get(static_handler))
@@ -78,215 +164,239 @@ async fn main() {
         .route("/index.html", get(static_handler))
         .route("/signup", get(signup))
         .route("/ws", get(ws_handler))
-        .with_state(app_state)
-        .layer(CorsLayer::new().allow_origin(Any).allow_methods(Any));
+        .route("/submit_game", post(submit_game))
+        .route("/leaderboard", get(leader_board))
+        .with_state(pool)
+        .layer(Extension(app_state))
+        .layer(Extension(Arc::new(Mutex::new(uuid_clock))))
+        .layer(
+            CorsLayer::new()
+                .allow_origin(AllowOrigin::predicate(
+                    |_origin: &HeaderValue, _request_parts: &http::request::Parts| true,
+                ))
+                .allow_headers([AUTHORIZATION, ACCEPT, CONTENT_TYPE])
+                .allow_private_network(true)
+                .allow_methods(Any),
+        );
+
     println!("Starting at localhost:8083");
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8083").await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let terminate_signal = signal::ctrl_c();
+
+    // Use select to run the server and listen for termination signal
+    tokio::select! {
+        _ = axum::serve(listener, app) => {
+            println!("Server finished execution");
+        },
+        _ = terminate_signal => {
+            println!("Received termination signal, shutting down...");
+        }
+    }
 }
 
-async fn signup() -> impl axum::response::IntoResponse {
+async fn signup(
+    DatabaseConnection(conn): DatabaseConnection,
+    Extension(clock): Extension<SharedContextV7>,
+) -> impl axum::response::IntoResponse {
     let mut rng = OsRng;
 
     let priv_key = SigningKey::generate(&mut rng);
+    conn.query(
+        "INSERT INTO players (player_id, public_key, secret_key, name) VALUES ($1, $2, $3, $4)",
+        &[
+            &Uuid::new_v7(Timestamp::now(&*clock.lock().await)),
+            &priv_key.verifying_key().to_bytes().to_vec(),
+            &priv_key.to_bytes().to_vec(),
+            &String::from("Player"),
+        ],
+    )
+    .await
+    .unwrap();
+
     Json(serde_json::json!({
         "pub_key": STANDARD_NO_PAD.encode(priv_key.verifying_key().to_bytes()),
         "priv_key": STANDARD_NO_PAD.encode(priv_key.to_bytes())
     }))
 }
 
-async fn ws_handler(
-    ws: WebSocketUpgrade,
-    State(state): State<AppState>,
-) -> impl axum::response::IntoResponse {
-    ws.on_upgrade(|socket| handle_socket(socket, state))
+async fn leader_board(
+    DatabaseConnection(conn): DatabaseConnection,
+) -> Result<axum::Json<LeaderBoard>, UserCreateError> {
+    let leader_board = conn
+        .query(
+            "
+SELECT
+    p.name,
+    COALESCE(SUM(
+        CASE
+            WHEN m.player1 = p.player_id THEN m.points_p1
+            WHEN m.player2 = p.player_id THEN m.points_p2
+        END
+    ), 0) AS total_points,
+    COUNT(DISTINCT m.match_id) AS total_games,
+    COUNT(CASE WHEN m.winner = p.player_id THEN 1 END) AS total_wins
+FROM
+    players p
+LEFT JOIN
+    matches m ON p.player_id IN (m.player1, m.player2)
+GROUP BY
+    p.player_id
+ORDER BY
+    total_points DESC, total_wins DESC, total_games DESC, p.name;
+            ",
+            &[],
+        )
+        .await?;
+    let leader_board = leader_board
+        .iter()
+        .map(|row| {
+            dbg!(row);
+            let name: &str = row.get(0);
+            let total_points: i64 = row.get(1);
+            let total_games: i64 = row.get(2);
+            let total_wins: i64 = row.get(3);
+            LeaderBoardEntry {
+                name: name.to_owned(),
+                total_points: total_points as u32,
+                total_games: total_games as u32,
+                total_wins: total_wins as u32,
+            }
+        })
+        .collect::<Vec<_>>();
+
+    Ok(Json(LeaderBoard {
+        total: leader_board.len() as u32,
+        entries: leader_board,
+    }))
 }
 
-async fn handle_socket(socket: WebSocket, state: AppState) {
-    let (mut sender, mut receiver) = socket.split();
-    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-
-    let mut csprng = OsRng;
-
-    let user_id = Uuid::new_v4();
-    let user = User {
-        partner_id: None,
-        sender: tx.clone(),
-        pub_key: None,
+async fn submit_game(
+    DatabaseConnection(conn): DatabaseConnection,
+    Extension(clock): Extension<SharedContextV7>,
+    Extension(state): Extension<AppState>,
+    Json(body): Json<GameBody>,
+) -> Result<String, UserCreateError> {
+    let signature_to_check = match signature_from_string(&body.signature) {
+        Some(signature) => signature,
+        None => return Err(UserCreateError::InvalidSignature),
     };
-    let secret = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_secs();
-    state.all_users.lock().await.insert(user_id, user);
-
-    sender
-        .send(Message::Text(
-            serde_json::to_string(&serde_json::json!({
-                "type": "verify",
-                "verify_time": secret.to_string()
-            }))
-            .unwrap(),
-        ))
-        .await
-        .unwrap();
-
-    tokio::spawn(async move {
-        while let Some(message) = rx.recv().await {
-            if sender.send(message).await.is_err() {
-                break;
-            }
-        }
-    });
-
-    let q = Uuid::nil();
-
-    while let Some(Ok(message)) = receiver.next().await {
-        if let Message::Text(text) = message {
-            let data: serde_json::Value = serde_json::from_str(&text).unwrap();
-            match data["type"].as_str() {
-                Some("join") => {
-                    let mut all_users = state.all_users.lock().await;
-
-                    if let Some(user) = all_users.get_mut(&user_id) {
-                        let signature = data["signature"].as_str().unwrap();
-                        let pub_key = data["pub_key"].as_str().unwrap();
-
-                        dbg!(&data, &text);
-
-                        let verify_key = VerifyingKey::from_bytes(
-                            STANDARD_NO_PAD
-                                .decode(pub_key)
-                                .unwrap()
-                                .as_slice()
-                                .try_into()
-                                .unwrap(),
-                        )
-                        .unwrap();
-                        let signature = Signature::from_bytes(
-                            STANDARD_NO_PAD
-                                .decode(signature)
-                                .unwrap()
-                                .as_slice()
-                                .try_into()
-                                .unwrap(),
-                        );
-                        //TODO: check if in redis
-                        if verify_key
-                            .verify_strict(secret.to_string().as_bytes(), &signature)
-                            .is_ok()
-                        {
-                            user.pub_key = Some(pub_key.to_owned());
-                        } else {
-                            tx.send(Message::Text(
-                                serde_json::json!({"type": "verified_failed"})
-                                    .to_string(),
-                            ))
-                            .unwrap();
-                            continue;
-                        }
-
-                        let mut queues = state.queues.lock().await;
-
-                        let mut waiting_users = queues.get_mut(&q);
-                        let waiting_users = match waiting_users {
-                            Some(waiting_users) => waiting_users,
-                            None => {
-                                queues.insert(q, Vec::new());
-                                waiting_users = queues.get_mut(&q);
-                                waiting_users.unwrap()
-                            }
-                        };
-
-                        if let Some(partner_user_id) = waiting_users.pop() {
-                            if let Some(partner_user) = all_users.get(&partner_user_id) {
-                                let user = all_users.get(&user_id).unwrap();
-                                let seed = rand_core::RngCore::next_u32(&mut csprng);
-                                let time = std::time::SystemTime::now()
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .unwrap()
-                                    .as_secs();
-                                let signature = state
-                                    .dice_seed_signing_keys
-                                    .lock()
-                                    .await
-                                    .sign(format!("{seed}:{time}").as_bytes());
-                                partner_user
-                                    .sender
-                                    .send(Message::Text(
-                                        serde_json::json!({
-                                            "type": "paired",
-                                            "public_key": partner_user.pub_key,
-                                            "partner_key": user.pub_key,
-                                            "initiator": false,
-                                            "seed": seed,
-                                            "signature": STANDARD_NO_PAD.encode(signature.to_bytes()),
-                                            "time": time
-                                        })
-                                        .to_string(),
-                                    ))
-                                    .unwrap();
-                                tx.send(Message::Text(
-                                    serde_json::json!({"type": "paired",
-                                         "public_key": user.pub_key,
-                                         "partner_key": partner_user.pub_key,
-                                         "initiator": true,
-                                         "seed": seed,
-                                         "signature": STANDARD_NO_PAD.encode(signature.to_bytes()),
-                                         "time": time
-                                    })
-                                    .to_string(),
-                                ))
-                                .unwrap();
-                                all_users.get_mut(&partner_user_id).unwrap().partner_id =
-                                    Some(user_id);
-                                all_users.get_mut(&user_id).unwrap().partner_id =
-                                    Some(partner_user_id);
-                            }
-                        } else {
-                            waiting_users.push(user_id);
-                        }
-                    }
-                }
-                Some("ice-candidate") | Some("offer") | Some("answer") => {
-                    let partner_id = state
-                        .all_users
-                        .lock()
-                        .await
-                        .get(&user_id)
-                        .unwrap()
-                        .partner_id;
-                    if let Some(partner_user_id) = partner_id {
-                        if let Some(partner_user) =
-                            state.all_users.lock().await.get(&partner_user_id)
-                        {
-                            partner_user.sender.send(Message::Text(text)).unwrap();
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-    let partner_id = state
-        .all_users
+    let keys = match body.starting {
+        true => (body.your_key.clone(), body.opponent_key.clone()),
+        false => (body.opponent_key.clone(), body.your_key.clone()),
+    };
+    let data_to_check = format!("{}:{}:{}:{}", body.seed, body.time, keys.0, keys.1);
+    let is_valid = state
+        .dice_seed_signing_keys
         .lock()
         .await
-        .get(&user_id)
-        .unwrap()
-        .partner_id;
-    if let Some(partner_user_id) = partner_id {
-        if let Some(partner_user) = state.all_users.lock().await.get(&partner_user_id) {
-            partner_user
-                .sender
-                .send(Message::Text(
-                    serde_json::json!({"type": "disconnected"}).to_string(),
-                ))
-                .unwrap();
+        .verify(data_to_check.as_bytes(), &signature_to_check);
+    if is_valid.is_err() {
+        return Err(UserCreateError::InvalidSignature);
+    };
+
+    let (verify_your, verify_other) = match (
+        verifying_key_from_string(&body.your_key),
+        verifying_key_from_string(&body.opponent_key),
+    ) {
+        (Some(your_key), Some(opponent_key)) => (your_key, opponent_key),
+        _ => {
+            return Err(UserCreateError::InvalidSignature);
         }
-    }
-    let mut queues = state.queues.lock().await;
-    let q = queues.get_mut(&q).unwrap();
-    q.retain(|&id| id != user_id);
-    state.all_users.lock().await.remove(&user_id);
+    };
+
+    let game = Game::validate_entire_game(
+        Keys::VerifyOnly {
+            my_keys: verify_your,
+            other_keys: verify_other,
+        },
+        (3, 3),
+        ServerGameInfo::new(body.seed, body.starting),
+        body.moves,
+    );
+
+    if let Err(e) = game {
+        return Err(UserCreateError::BadRequest(e.to_string()));
+    };
+
+    let (board_data, sql_history) = game.map_err(UserCreateError::BadRequest)?;
+
+    let user_id: Uuid = conn
+        .query_one(
+            "SELECT player_id FROM players WHERE public_key = $1",
+            &[&STANDARD_NO_PAD.decode(&body.your_key)?],
+        )
+        .await?
+        .get(0);
+    let partner_id: Uuid = conn
+        .query_one(
+            "SELECT player_id FROM players WHERE public_key = $1",
+            &[&STANDARD_NO_PAD.decode(&body.opponent_key)?],
+        )
+        .await?
+        .get(0);
+
+    let (winner, result) = match board_data.winner {
+        GameEnd {
+            winner: true,
+            win_by_tie: false,
+            win_by_forfeit: false,
+        } => (Some(user_id), "win".to_string()),
+        GameEnd {
+            winner: false,
+            win_by_tie: false,
+            win_by_forfeit: false,
+        } => (Some(partner_id), "win".to_string()),
+        GameEnd {
+            win_by_tie: true, ..
+        } => (None, "tie".to_string()),
+        GameEnd {
+            winner: true,
+            win_by_forfeit: true,
+            ..
+        } => (Some(user_id), "forfeit".to_string()),
+        GameEnd {
+            winner: false,
+            win_by_forfeit: true,
+            ..
+        } => (Some(partner_id), "forfeit".to_string()),
+    };
+
+    conn.query(
+        "INSERT INTO matches(
+        match_id,
+        seed,
+        time,
+        player1,
+        player2,
+        winner,
+        result,
+        points_p1,
+        points_p2
+    ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+        &[
+            &Uuid::new_v7(Timestamp::now(&*clock.lock().await)),
+            &(body.seed as i64),
+            &(body.time as i64),
+            &user_id,
+            &partner_id,
+            &winner,
+            &result,
+            &(board_data.points.me.iter().sum::<u32>() as i16),
+            &(board_data.points.other.iter().sum::<u32>() as i16),
+        ],
+    )
+    .await?;
+
+    println!("signature is valid");
+
+    Ok("Ok".to_owned())
+}
+
+/// Utility function for mapping any error into a `500 Internal Server Error`
+/// response.
+fn internal_error<E>(err: E) -> (StatusCode, String)
+where
+    E: std::error::Error,
+{
+    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
 }

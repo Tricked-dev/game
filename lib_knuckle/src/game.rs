@@ -23,6 +23,14 @@ pub struct Game {
     keys: Keys,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct HistoryForSql {
+    seq: u32,
+    now: u64,
+    x: u16,
+    number: u8,
+}
+
 impl Game {
     pub fn new(keys: Keys, deck_size: (usize, usize), info: ServerGameInfo) -> Self {
         let deck = Self::create_deck(deck_size);
@@ -42,24 +50,40 @@ impl Game {
         }
     }
     pub fn validate_entire_game(
-        my_keys: VerifyingKey,
-        other_keys: VerifyingKey,
+        keys: Keys,
         deck_size: (usize, usize),
         info: ServerGameInfo,
         history: Vec<HistoryItem>,
-    ) -> Result<(), String> {
-        let mut game = Game::new(
-            Keys::VerifyOnly {
-                my_keys,
-                other_keys,
-            },
-            deck_size,
-            info,
-        );
+    ) -> Result<(BoardData, Vec<HistoryForSql>), String> {
+        let mut game = Game::new(keys, deck_size, info);
+        let mut seq = 0;
+        let mut last_time = 0;
+        let mut sql_history = Vec::new();
         for item in history {
+            if last_time > item.now {
+                return Err(format!(
+                    "Invalid time, expected more than {}, got {}",
+                    last_time, item.now
+                ));
+            }
+            seq += 1;
+            if seq != item.seq {
+                return Err(format!(
+                    "Invalid sequence, expected {}, got {}",
+                    seq, item.seq
+                ));
+            }
+
+            sql_history.push(HistoryForSql {
+                seq: item.seq,
+                now: item.now,
+                x: item.x,
+                number: game.dice.peek() as u8,
+            });
+
             game.add_opponent_move(item)?;
         }
-        Ok(())
+        Ok((game.get_board_data(), sql_history))
     }
 
     pub fn disable_verify(&mut self) {
@@ -268,7 +292,7 @@ impl Game {
                         win_by_forfeit: false,
                         winner: true,
                     },
-                    (other, me) if me < other => GameEnd {
+                    (me, other) if me < other => GameEnd {
                         win_by_tie: false,
                         win_by_forfeit: false,
                         winner: false,
@@ -293,10 +317,10 @@ impl Game {
     any(test, target_arch = "wasm32", feature = "wasm"),
     tsify(into_wasm_abi, from_wasm_abi)
 )]
-struct GameEnd {
-    win_by_tie: bool,
-    win_by_forfeit: bool,
-    winner: bool,
+pub struct GameEnd {
+    pub win_by_tie: bool,
+    pub win_by_forfeit: bool,
+    pub winner: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -309,7 +333,7 @@ struct GameEnd {
     tsify(into_wasm_abi, from_wasm_abi)
 )]
 pub struct BoardData {
-    points: Points,
+    pub points: Points,
     decks: Decks,
     history: Vec<HistoryItem>,
     seq: u32,
@@ -317,7 +341,7 @@ pub struct BoardData {
     next_dice: u8,
     your_turn: bool,
     is_completed: bool,
-    winner: GameEnd,
+    pub winner: GameEnd,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -330,8 +354,8 @@ pub struct BoardData {
     tsify(into_wasm_abi, from_wasm_abi)
 )]
 pub struct Points {
-    me: Vec<u32>,
-    other: Vec<u32>,
+    pub me: Vec<u32>,
+    pub other: Vec<u32>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -374,6 +398,12 @@ impl HistoryItem {
 pub struct ServerGameInfo {
     pub(crate) seed: u64,
     pub(crate) starting: bool,
+}
+
+impl ServerGameInfo {
+    pub fn new(seed: u64, starting: bool) -> Self {
+        Self { seed, starting }
+    }
 }
 
 #[cfg(test)]

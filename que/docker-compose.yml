@@ -1,13 +1,13 @@
 services:
-  dragonfly:
-    image: 'redis'
-    restart: no
-    ulimits:
-      memlock: -1
+  timescaledb:
+    image: timescale/timescaledb-ha:pg16
+    container_name: timescaledb
     ports:
-      - "6379:6379"
+      - "5432:5432"
+    environment:
+      - POSTGRES_PASSWORD=postgres
     volumes:
-      - dragonflydata:/data
+      - timescaledb-data:/home/postgres/pgdata/data
 
 volumes:
-  dragonflydata:
+  timescaledb-data:

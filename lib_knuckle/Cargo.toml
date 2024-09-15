@@ -34,4 +34,4 @@ wasm = [
 debug = ["console_error_panic_hook"]
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "lib"]

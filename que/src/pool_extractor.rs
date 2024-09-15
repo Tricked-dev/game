@@ -1,16 +1,16 @@
-use axum::{
-    async_trait,
-    extract::{FromRef, FromRequestParts},
-    http::{request::Parts, StatusCode},
-};
+use crate::internal_error;
+use async_trait::async_trait;
+use axum::extract::{FromRef, FromRequestParts};
 use bb8::{Pool, PooledConnection};
-use bb8_redis::RedisConnectionManager;
+use bb8_postgres::PostgresConnectionManager;
+use http::{request::Parts, StatusCode};
+use tokio_postgres::NoTls;
 
-use bb8_redis::bb8;
+pub type ConnectionPool = Pool<PostgresConnectionManager<NoTls>>;
 
-pub type ConnectionPool = Pool<RedisConnectionManager>;
+pub type Conn = PooledConnection<'static, PostgresConnectionManager<NoTls>>;
 
-pub struct DatabaseConnection(pub PooledConnection<'static, RedisConnectionManager>);
+pub struct DatabaseConnection(pub Conn);
 
 #[async_trait]
 impl<S> FromRequestParts<S> for DatabaseConnection
@@ -30,14 +30,4 @@ where
 
         Ok(Self(conn))
     }
-}
-
-/// Utility function for mapping any error into a `500 Internal Server Error`
-/// response.
-/// TODO: use thiserror or something!
-fn internal_error<E>(err: E) -> (StatusCode, String)
-where
-    E: std::error::Error,
-{
-    (StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
 }
