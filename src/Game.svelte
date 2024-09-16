@@ -384,13 +384,13 @@ $effect(() => {
         <img src="/assets/ending-lose.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}">
     {/if}
     <div class="w-full h-full z-10 absolute left-0 top-0 flex flex-col justify-center items-center">
-        <div class="ml-4 absolute left-0 top-48 text-5xl font-bold flex text-nowrap">
+        <div class="ml-4 absolute left-0 top-48 text-5xl  flex text-nowrap">
             <img src="/assets/end-texts-your.png" class="h-10" alt="">: {gameState?.points?.me?.reduce((a, b) => a + b, 0)}
         </div>
-        <div class="ml-4 absolute left-0 top-60 text-5xl font-bold flex text-nowrap">
+        <div class="ml-4 absolute left-0 top-60 text-5xl  flex text-nowrap">
           <img src="/assets/end-texts-opponent.png" alt="" class="h-10">:  {gameState?.points?.other?.reduce((a, b) => a + b, 0)}
         </div>
-        <div class="ml-4 absolute left-0 top-72 text-5xl font-bold flex terxt-nowrap">
+        <div class="ml-4 absolute left-0 top-72 text-5xl  flex terxt-nowrap">
            <img src="/assets/end-texts-total.png" class="h-10" alt="">: {gameState?.seq}
         </div>
     <button class="mt-auto mx-auto mb-10" onclick={() => {
@@ -509,7 +509,7 @@ $effect(() => {
             })}
 
         </div>
-        <span class="text-1xl font-semibold">Opponents layout: </span>
+        <span class="text-2xl">Opponents layout: </span>
         <div class="grid grid-cols-3 gap-3 mx-auto relative">
             {@render diceLayout(gameState?.decks.other, gameState?.points?.other, highLightsOther, (index:number) => {
             console.log("Tried clicking on other dice ", index)
@@ -521,37 +521,37 @@ $effect(() => {
 
 {:else}
 
-<div class="w-full h-full flex justify-center items-center relative rounded-xl text-white">
-    <div class="h-[40rem] w-[20rem] relative">
+<div class=":uno: w-full h-full flex justify-center items-center relative rounded-xl text-white">
+    <div class=":uno: h-[40rem] w-[20rem] relative">
         <img src="/assets/start-bg.png" alt="" class="absolute left-0 top-0 h-full w-full rounded-xl">
-        <div class="absolute left-0 top-0 h-full w-full flex flex-col justify-center items-center p-4">
-            <span class="text-4xl text-center font-semibold">KnuckleBones</span>
-            <a class="text-center" href="https://tricked.dev">By Tricked</a>
-            <span>Rules: <a class="underline hover:text-red-700 duration-150" href="https://cult-of-the-lamb.fandom.com/wiki/Knucklebones">As seen in the Cult Of Lamb Wiki</a></span>
-            <details class="w-full text-lg">
+        <div class=":uno: absolute left-0 top-0 h-full w-full flex flex-col justify-center items-center p-4">
+            <span class=":uno: text-4xl text-center font-semibold">KnuckleBones</span>
+            <a class=":uno: text-center" href="https://tricked.dev">By Tricked</a>
+            <span>Rules: <a class=":uno: underline hover:text-red-700 duration-150" href="https://cult-of-the-lamb.fandom.com/wiki/Knucklebones">As seen in the Cult Of Lamb Wiki</a></span>
+            <details class=":uno: w-full text-lg">
                 <summary class="w-full">TL;DR</summary>
                 <ul class="font-serif">
                     <li>You get a dice and the more of the same dice you have in a row the more points you get</li>
                     <li>All dices of the same number get removed from the other row if you place a dice</li>
                 </ul>
             </details>
-			<details class="w-full text-lg">
+			<details class=":uno: w-full text-lg">
 				<summary class="w-full">Leaderboard</summary>
-				<ul class="font-serif max-h-80 overflow-y-scroll">
+				<ul class=":uno: font-serif max-h-80 overflow-y-scroll">
 					{#each (leaderboardData?.entries ?? []) as entry}
 						<li>{entry.name}: {entry.total_points} points, {entry.total_games} games, {entry.total_wins} wins</li>
 					{/each}
 				</ul>
 			</details>
 
-            <button onclick={startChat} class="mt-auto hover:brightness-110">
+            <button onclick={startChat} class=":uno: mt-auto hover:brightness-110">
                 <img src="/assets/start-btn.png" class="h-24" alt="">
             </button>
         </div>
 
     </div>
 </div>
-<button class="absolute top-2 right-2 hover:brightness-110" onclick={() => {
+<button class=":uno: absolute top-2 right-2 hover:brightness-110" onclick={() => {
     userDialog.showModal();
 }}>
 <img class="h-16" src="/assets/user.png">

@@ -5,8 +5,9 @@
 - Ui improvements
 - Backend service to store results in
 - Better error handling
-- Save private and public key locally and only send public key to queing service
-- Key value store to store public and private keys
+- proper logging
+- use enums in ws messages
+- look into deadlock
 
 ## License
 
@@ -22,3 +23,7 @@ Images are under CC-0, that stuff is so ugly anyone can use it
 ## Development
 
 The assets are generated via the `./assets.sh` script, which requires `aseprite` to be installed. Might work with libresprite haven't tested, (i compiled aseprite from source using aur)
+
+## Font:
+
+https://tinyworlds.itch.io/free-pixel-font-thaleah

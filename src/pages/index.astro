@@ -15,7 +15,7 @@ import "@fontsource/pixelify-sans";
 		<Game client:load />
 		<style is:global>
 			body,html {
-  				font-family: "Pixelify Sans";
+  				font-family: "Thaleah", "Pixelify Sans";
 				background-image: url("/assets/background.png"), url("/assets/background2.png");
 			}
 			body {
@@ -23,6 +23,11 @@ import "@fontsource/pixelify-sans";
 			}
 			body:has(dialog[open]) {
 			 filter: blur(1px) brightness(0.8);
+			}
+
+			@font-face {
+				font-family: "Thaleah";
+				src: url("/fonts/ThaleahFat.ttf");
 			}
 		</style>
 	</body>
