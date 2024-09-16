@@ -301,6 +301,8 @@ function formatIntoColumnsCountPerColumn(arr:number[], width:number) {
 let highLightsMine = $derived(formatIntoColumnsCountPerColumn(gameState?.decks.me ?? [], 3));
 let highLightsOther = $derived(formatIntoColumnsCountPerColumn(gameState?.decks.other ?? [], 3));
 
+let name = $state("");
+
 $effect(() => {
 	console.log({...highLightsMine});
 	console.log({...highLightsOther});
@@ -405,7 +407,7 @@ $effect(() => {
 
 </dialog>
 
-<dialog bind:this={disconnectedDialog} class="bg-transparent text-white">
+<dialog bind:this={disconnectedDialog} class=":uno: bg-transparent text-white">
     Your opponent disconnected, Please start a new game.
     <button onclick={() => {
        resetChat();
@@ -413,26 +415,66 @@ $effect(() => {
     }}>Return to start</button>
 </dialog>
 
-<dialog bind:this={waitingDialog} class="bg-transparent text-white outline-none" >
+<dialog bind:this={waitingDialog} class=":uno: bg-transparent text-white outline-none" >
 	<div class="flex flex-col z-50">
     Waiting for a opponent to join.
 	<img src="/assets/waiting.png" alt="" class="" >
 	</div>
 </dialog>
 
-<dialog bind:this={kickedDialog} class="bg-transparent text-white outline-none" >
+<dialog bind:this={kickedDialog} class=":uno: bg-transparent text-white outline-none" >
     You were kicked from the game. This is probably because you joined the queue on another device/tab
 </dialog>
 
-<dialog bind:this={userDialog} class="bg-transparent text-white outline-none w-[40rem] h-[70rem]" >
+<dialog bind:this={userDialog} class=":uno: bg-transparent text-white outline-none w-[40rem] h-[70rem]" >
 	<img src="/assets/options.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5]">
-	<div class="absolute px-16 flex flex-col h-full w-full pt-60 pb-10">
+	<div class=":uno: absolute px-16 flex flex-col h-full w-full pt-60 pb-10">
 		<label class="text-5xl">
 			Name:
-		<input  maxlength="7" class="p-2 bg-cover bg-center bg-no-repeat h-12 w-64 text-5xl bg-transparent text-white outline-none bg-[url(/assets/name.png)]" >
+		<input bind:value={name}  maxlength="7" class=":uno: p-2 bg-cover bg-center bg-no-repeat h-12 w-64 text-5xl bg-transparent text-white outline-none bg-[url(/assets/name.png)]" >
 		</label>
 
-		<button class="mt-auto mx-auto">
+		<button onclick={() => {
+			navigator.clipboard.writeText(localStorage.getItem("userInfo")!);
+			alert("Copied to clipboard make sure to save this somewhere safe")
+		}}>Copy user info</button>
+		<button onclick={() => {
+			let info = prompt("Paste user info here");
+			if (info) {
+				localStorage.setItem("userInfo", info);
+				userDialog.close();
+			}
+		}}>Login from user info</button>
+
+		<button class="mt-auto mx-auto" onclick={async() => {
+			let minLength = 3;
+			let maxLength = 7;
+			if (name.length < minLength || name.length > maxLength) {
+				alert("Name must be between 3 and 7 characters");
+				return;
+			}
+			console.log("Name is", name);
+			let keys = localStorage.getItem("userInfo");
+			if (!keys) {
+				alert("You need to sign in first, play a game or insert private and public keys");
+				return;
+			}
+			let json = JSON.parse(keys);
+			let res = await fetch(`${backendUrl}/set_name`, {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					name: name,
+					pub_key: json.pub_key,
+					signature: sign_message(json.priv_key, name),
+				}),
+			});
+			if(res.ok) {
+				userDialog.close();
+			}
+		}}>
 			<img src="/assets/save.png" alt="" class="brightness-125 hover:brightness-110 w-72" >
 		</button>
 	</div>
@@ -480,7 +522,7 @@ $effect(() => {
         console.log("Dragging ended")
     }}
          >
-        {@render dice(i)}
+        {@render dice(i, 0)}
 
         </div>
 
@@ -510,7 +552,7 @@ $effect(() => {
 
         </div>
         <span class="text-2xl">Opponents layout: </span>
-        <div class="grid grid-cols-3 gap-3 mx-auto relative">
+        <div class=":uno: grid grid-cols-3 gap-3 mx-auto relative">
             {@render diceLayout(gameState?.decks.other, gameState?.points?.other, highLightsOther, (index:number) => {
             console.log("Tried clicking on other dice ", index)
             })}
