@@ -54,3 +54,18 @@ pub struct LeaderBoardEntry {
     pub total_games: u32,
     pub total_wins: u32,
 }
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[cfg_attr(
+    any(test, target_arch = "wasm32", feature = "wasm"),
+    derive(tsify::Tsify)
+)]
+#[cfg_attr(
+    any(test, target_arch = "wasm32", feature = "wasm"),
+    tsify(into_wasm_abi, from_wasm_abi)
+)]
+pub struct UserUpdate {
+    pub name: String,
+    pub pub_key: String,
+    pub signature: String,
+}

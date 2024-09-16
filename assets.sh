@@ -15,6 +15,11 @@ ase2png deck-bg
 ase2png start-btn
 ase2png start-bg
 ase2png waiting
+ase2png user
+ase2png name
+ase2png options
+ase2png options
+ase2png save
 layerAse2png dices
 layerAse2png turns
 layerAse2png ending

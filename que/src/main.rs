@@ -15,7 +15,7 @@ use http::{
     HeaderValue, StatusCode,
 };
 use lib_knuckle::{
-    api_interfaces::{GameBody, LeaderBoard, LeaderBoardEntry},
+    api_interfaces::{GameBody, LeaderBoard, LeaderBoardEntry, UserUpdate},
     game::{Game, GameEnd, ServerGameInfo},
     keys::Keys,
     signature_from_string, verifying_key_from_string,
@@ -194,13 +194,6 @@ async fn main() {
             println!("Received termination signal, shutting down...");
         }
     }
-}
-
-#[derive(Deserialize)]
-struct UserUpdate {
-    name: String,
-    pub_key: String,
-    signature: String,
 }
 
 async fn set_name(

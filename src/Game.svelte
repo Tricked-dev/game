@@ -19,6 +19,7 @@ let dialog: HTMLDialogElement = $state(null!);
 let disconnectedDialog: HTMLDialogElement = $state(null!);
 let waitingDialog: HTMLDialogElement = $state(null!);
 let kickedDialog: HTMLDialogElement = $state(null!);
+let userDialog: HTMLDialogElement = $state(null!);
 
 
 let status: string | undefined = $state();
@@ -423,6 +424,20 @@ $effect(() => {
     You were kicked from the game. This is probably because you joined the queue on another device/tab
 </dialog>
 
+<dialog bind:this={userDialog} class="bg-transparent text-white outline-none w-[40rem] h-[70rem]" >
+	<img src="/assets/options.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5]">
+	<div class="absolute px-16 flex flex-col h-full w-full pt-60 pb-10">
+		<label class="text-5xl">
+			Name:
+		<input  maxlength="7" class="p-2 bg-cover bg-center bg-no-repeat h-12 w-64 text-5xl bg-transparent text-white outline-none bg-[url(/assets/name.png)]" >
+		</label>
+
+		<button class="mt-auto mx-auto">
+			<img src="/assets/save.png" alt="" class="brightness-125 hover:brightness-110 w-72" >
+		</button>
+	</div>
+</dialog>
+
 {#if gameInfo}
 
 
@@ -505,6 +520,7 @@ $effect(() => {
 {/if}
 
 {:else}
+
 <div class="w-full h-full flex justify-center items-center relative rounded-xl text-white">
     <div class="h-[40rem] w-[20rem] relative">
         <img src="/assets/start-bg.png" alt="" class="absolute left-0 top-0 h-full w-full rounded-xl">
@@ -535,4 +551,9 @@ $effect(() => {
 
     </div>
 </div>
+<button class="absolute top-2 right-2 hover:brightness-110" onclick={() => {
+    userDialog.showModal();
+}}>
+<img class="h-16" src="/assets/user.png">
+</button>
 {/if}
