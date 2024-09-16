@@ -23,6 +23,7 @@ use lib_knuckle::{
 use pool_extractor::DatabaseConnection;
 use rand_core::OsRng;
 use routes::websocket::ws_handler;
+use serde::Deserialize;
 use std::{collections::HashMap, sync::Arc};
 use thiserror::Error;
 use tokio::{fs, signal, sync::Mutex};
@@ -59,6 +60,9 @@ pub enum UserCreateError {
     #[error("Pool Error")]
     #[status(StatusCode::INTERNAL_SERVER_ERROR)]
     PoolError(#[from] bb8::RunError<tokio_postgres::Error>),
+    #[error("Signature Error")]
+    #[status(StatusCode::BAD_REQUEST)]
+    SignatureError(#[from] ed25519_dalek::SignatureError),
 }
 
 #[derive(Clone, Debug)]
@@ -163,6 +167,7 @@ async fn main() {
         .route("/ws", get(ws_handler))
         .route("/submit_game", post(submit_game))
         .route("/leaderboard", get(leader_board))
+        .route("/set_name", post(set_name))
         .with_state(pool)
         .layer(Extension(app_state))
         .layer(Extension(Arc::new(Mutex::new(uuid_clock))))
@@ -188,6 +193,32 @@ async fn main() {
         _ = terminate_signal => {
             println!("Received termination signal, shutting down...");
         }
+    }
+}
+
+#[derive(Deserialize)]
+struct UserUpdate {
+    name: String,
+    pub_key: String,
+    signature: String,
+}
+
+async fn set_name(
+    DatabaseConnection(conn): DatabaseConnection,
+    Json(body): Json<UserUpdate>,
+) -> Result<String, UserCreateError> {
+    let signature = signature_from_string(&body.signature);
+    let pub_key = verifying_key_from_string(&body.pub_key);
+    if let (Some(signature), Some(pub_key)) = (signature, pub_key) {
+        pub_key.verify_strict(body.name.as_bytes(), &signature)?;
+        conn.query(
+            "UPDATE players SET name = $1 WHERE public_key = $2",
+            &[&body.name, &STANDARD_NO_PAD.decode(&body.pub_key)?],
+        )
+        .await?;
+        Ok("Ok".to_string())
+    } else {
+        Err(UserCreateError::InvalidSignature)
     }
 }
 
