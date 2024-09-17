@@ -70,6 +70,10 @@ pub async fn handle_socket(socket: WebSocket, state: AppState, conn: Conn) {
 
     let q = Uuid::nil();
 
+    if !state.queues.contains_key(&q) {
+        state.queues.insert(q, Vec::new());
+    }
+
     'outer: while let Some(Ok(message)) = receiver.next().await {
         if let Message::Text(text) = message {
             let data: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -134,43 +138,47 @@ pub async fn handle_socket(socket: WebSocket, state: AppState, conn: Conn) {
 
                         dbg!("Locking queues");
 
-                        let mut waiting_users = state.queues.get_mut(&q);
+                        let waiting_users = state.queues.get_mut(&q);
                         let mut waiting_users = match waiting_users {
                             Some(waiting_users) => waiting_users,
                             None => {
-                                state.queues.insert(q, Vec::new());
-                                waiting_users = state.queues.get_mut(&q);
-                                waiting_users.unwrap()
+                                tx.send(Message::Text(
+                                    serde_json::json!({"type": "disconnect", "reason": "Missing Data"})
+                                        .to_string(),
+                                )).unwrap();
+                                tracing::error!("Somehow waiting user queue is missing");
+                                break 'outer;
                             }
                         };
-                        dbg!("Locked queues");
-                        dbg!(&waiting_users);
-                        if let Some(partner_user_id) = waiting_users.pop() {
-                            drop(waiting_users);
-                            let partner_option =
-                                state.all_users.get_mut(&partner_user_id);
-                            if let Some(mut partner_user) = partner_option {
-                                let mut user = state.all_users.get_mut(&user_id).unwrap();
-                                dbg!(&user, &partner_user);
-                                let seed = rand_core::RngCore::next_u32(&mut csprng);
-                                let time = std::time::SystemTime::now()
-                                    .duration_since(std::time::UNIX_EPOCH)
-                                    .unwrap()
-                                    .as_secs();
-                                let user_pub_key = user.pub_key.clone().unwrap();
-                                let partner_pub_key =
-                                    partner_user.pub_key.clone().unwrap();
 
-                                let signature =
-                                    state.dice_seed_signing_keys.lock().await.sign(
-                                        format!(
-                                            "{seed}:{time}:{}:{}",
-                                            user_pub_key, partner_pub_key
-                                        )
-                                        .as_bytes(),
-                                    );
-                                dbg!("Sending Paired");
-                                partner_user
+                        if let Some(partner_user_id) = waiting_users.pop() {
+                            dbg!("Partner found!");
+                            let partner_option = state.all_users.get(&partner_user_id);
+                            if let Some(partner_user) = partner_option.map(|v| v.clone())
+                            {
+                                {
+                                    let mut user =
+                                        state.all_users.get_mut(&user_id).unwrap();
+                                    dbg!(&user, &partner_user);
+                                    let seed = rand_core::RngCore::next_u32(&mut csprng);
+                                    let time = std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .unwrap()
+                                        .as_secs();
+                                    let user_pub_key = user.pub_key.clone().unwrap();
+                                    let partner_pub_key =
+                                        partner_user.pub_key.clone().unwrap();
+
+                                    let signature =
+                                        state.dice_seed_signing_keys.lock().await.sign(
+                                            format!(
+                                                "{seed}:{time}:{}:{}",
+                                                user_pub_key, partner_pub_key
+                                            )
+                                            .as_bytes(),
+                                        );
+                                    dbg!("Sending Paired");
+                                    partner_user
                                     .sender
                                     .send(Message::Text(
                                         serde_json::json!({
@@ -185,8 +193,8 @@ pub async fn handle_socket(socket: WebSocket, state: AppState, conn: Conn) {
                                         .to_string(),
                                     ))
                                     .unwrap();
-                                dbg!("Sending User Text");
-                                tx.send(Message::Text(
+                                    dbg!("Sending User Text");
+                                    tx.send(Message::Text(
                                     serde_json::json!({"type": "paired",
                                          "public_key": user.pub_key,
                                          "partner_key": partner_user.pub_key,
@@ -198,11 +206,18 @@ pub async fn handle_socket(socket: WebSocket, state: AppState, conn: Conn) {
                                     .to_string(),
                                 ))
                                 .unwrap();
-                                dbg!("Done sending user text");
-                                user.partner_id = Some(partner_user_id);
-                                partner_user.partner_id = Some(user_id);
+                                    dbg!("Done sending user text");
+                                    user.partner_id = Some(partner_user_id);
+                                }
+
+                                state
+                                    .all_users
+                                    .get_mut(&partner_user_id)
+                                    .unwrap()
+                                    .partner_id = Some(user_id);
                             }
                         } else {
+                            dbg!("Partner not found!");
                             waiting_users.push(user_id);
                         }
                     }
