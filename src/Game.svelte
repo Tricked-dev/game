@@ -162,6 +162,7 @@ async function initializePeerConnection(isInitiator:boolean) {
 	if (isInitiator) {
 		console.log("Creating datachannel");
 		dataChannel = peerConnection.createDataChannel("chat");
+		window.dc = dataChannel;
 		setupDataChannel();
 
 		const offer = await peerConnection.createOffer();
@@ -177,6 +178,7 @@ async function initializePeerConnection(isInitiator:boolean) {
 	} else {
 		peerConnection.ondatachannel = (event) => {
 			dataChannel = event.channel;
+			window.dc = dataChannel;
 			setupDataChannel();
 		};
 	}
@@ -209,12 +211,26 @@ function setupDataChannel() {
 		console.log("Datachannel closed");
 	};
 
-	dataChannel.onmessage = (event) => {
-		let data = new Uint8Array(event.data);
-		console.log(event);
-		console.log("Received Data", data);
-		console.log(game.w_add_opponent_move(data));
-		gameState = game.w_get_board_data();
+	dataChannel.onmessage =async (event) => {
+		if (event.data instanceof ArrayBuffer) {
+			let data = new Uint8Array(event.data);
+			console.log("Length", data.length);
+			console.log(data)
+			console.log(game.w_add_opponent_move(data));
+			gameState = game.w_get_board_data();
+		} else if (event.data instanceof Blob) {
+			let data = new Uint8Array(await event.data.arrayBuffer());
+			console.log("Length", data.length);
+			console.log(data)
+			console.log(game.w_add_opponent_move(data));
+			gameState = game.w_get_board_data();
+		}
+		// console.log("Received Data", event);
+		// let data = new Uint8Array(event.data);
+		// console.log(event);
+		// console.log("Received Data", data);
+		// console.log(game.w_add_opponent_move(data));
+		// gameState = game.w_get_board_data();
 	};
 }
 
