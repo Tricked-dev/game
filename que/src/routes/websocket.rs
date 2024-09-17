@@ -26,10 +26,18 @@ pub async fn ws_handler(
     DatabaseConnection(conn): DatabaseConnection,
 ) -> impl axum::response::IntoResponse {
     tracing::debug!("Got WS connection");
-    ws.on_upgrade(|socket| handle_socket(socket, state, conn))
+    ws.on_upgrade(|socket| async {
+        if let Err(e) = handle_socket(socket, state, conn).await {
+            tracing::error!("Error in websocket: {e:?}");
+        }
+    })
 }
 
-pub async fn handle_socket(socket: WebSocket, state: AppState, conn: Conn) {
+pub async fn handle_socket(
+    socket: WebSocket,
+    state: AppState,
+    conn: Conn,
+) -> Result<(), UserCreateError> {
     let (mut sender, mut receiver) = socket.split();
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
 
@@ -45,8 +53,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState, conn: Conn) {
 
     tracing::debug!("{:?}", &state.all_users);
     let secret = SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
+        .duration_since(SystemTime::UNIX_EPOCH)?
         .as_secs();
     state.all_users.insert(user_id, user);
     tracing::debug!("Sending Verify");
@@ -59,7 +66,7 @@ pub async fn handle_socket(socket: WebSocket, state: AppState, conn: Conn) {
             .unwrap(),
         ))
         .await
-        .unwrap();
+        .map_err(|_| UserCreateError::Internal("Failed Sending".to_owned()))?;
 
     tokio::spawn(async move {
         while let Some(message) = rx.recv().await {
@@ -69,15 +76,9 @@ pub async fn handle_socket(socket: WebSocket, state: AppState, conn: Conn) {
         }
     });
 
-    let mut queue = Arc::new(RwLock::new(Uuid::nil()));
+    let mut queue_name = Uuid::nil();
 
-    let state_clone = state.clone();
-    let tx_clone = tx.clone();
-    let queue_clone = queue.clone();
-    let data_handler = || async move {
-        let state = state_clone;
-        let tx = tx_clone;
-        let queue = queue_clone.clone();
+    let data_handler = async {
         while let Some(Ok(message)) = receiver.next().await {
             if let Message::Text(text) = message {
                 let data: serde_json::Value = serde_json::from_str(&text).unwrap();
@@ -99,12 +100,10 @@ pub async fn handle_socket(socket: WebSocket, state: AppState, conn: Conn) {
                         })?;
 
                         // default to public queue
-                        let queue_name = match data["queue"].as_str() {
+                        queue_name = match data["queue"].as_str() {
                             Some(queue_name) => Uuid::parse_str(queue_name)?,
                             None => Uuid::nil(),
                         };
-
-                        *queue.write().await = queue_name;
 
                         {
                             let mut user =
@@ -281,7 +280,8 @@ pub async fn handle_socket(socket: WebSocket, state: AppState, conn: Conn) {
         Ok(())
     };
 
-    let out: Result<(), UserCreateError> = data_handler().await;
+    let out: Result<(), UserCreateError> = data_handler.await;
+
     if let Err(e) = out {
         tracing::debug!("User disconnected: {e:?}");
         tx.send(Message::Text(
@@ -302,8 +302,9 @@ pub async fn handle_socket(socket: WebSocket, state: AppState, conn: Conn) {
                 .unwrap();
         }
     }
-    if let Some(mut q) = state.queues.get_mut(&*queue.read().await) {
+    if let Some(mut q) = state.queues.get_mut(&queue_name) {
         q.retain(|&id| id != user_id);
     }
     state.all_users.remove(&user_id);
+    Ok(())
 }
