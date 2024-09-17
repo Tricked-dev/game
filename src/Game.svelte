@@ -428,7 +428,9 @@ $effect(() => {
 </dialog>
 
 <dialog bind:this={userDialog} class=":uno: bg-transparent text-white outline-none w-[40rem] h-[70rem]" >
-	<img src="/assets/options.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5]">
+	<img src="/assets/options.png" alt="" class=":uno: absolute left-0 top-0 h-full w-full aspect-[2/5]">
+
+
 	<div class=":uno: absolute px-16 flex flex-col h-full w-full pt-60 pb-10">
 		<label class="text-5xl">
 			Name:
@@ -479,6 +481,11 @@ $effect(() => {
 			<img src="/assets/save.png" alt="" class="brightness-125 hover:brightness-110 w-72" >
 		</button>
 	</div>
+	<button class=":uno: absolute right-0 top-0 " onclick={() => {
+		userDialog.close();
+	}}>
+	<img src="/assets/close.png" alt="" class=":uno: size-12 hover:brightness-110 rounded-xl">
+	</button>
 </dialog>
 
 {#if gameInfo}

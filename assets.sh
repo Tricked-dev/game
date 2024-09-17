@@ -20,6 +20,7 @@ ase2png name
 ase2png options
 ase2png options
 ase2png save
+ase2png close
 layerAse2png dices
 layerAse2png turns
 layerAse2png ending
