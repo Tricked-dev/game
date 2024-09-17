@@ -51,18 +51,27 @@ pub enum UserCreateError {
     #[error("{0}")]
     #[status(StatusCode::BAD_REQUEST)]
     BadRequest(String),
-    #[error("Internal Database Error")]
+    #[error("Internal Database Error: {0}")]
     #[status(StatusCode::INTERNAL_SERVER_ERROR)]
     DatabaseError(#[from] tokio_postgres::Error),
-    #[error("Base64 Decode Error")]
+    #[error("Base64 Decode Error: {0}")]
     #[status(StatusCode::BAD_REQUEST)]
     Base64DecodeError(#[from] base64::DecodeError),
-    #[error("Pool Error")]
+    #[error("Pool Error: {0}")]
     #[status(StatusCode::INTERNAL_SERVER_ERROR)]
     PoolError(#[from] bb8::RunError<tokio_postgres::Error>),
-    #[error("Signature Error")]
+    #[error("Signature Error: {0}")]
     #[status(StatusCode::BAD_REQUEST)]
     SignatureError(#[from] ed25519_dalek::SignatureError),
+    #[error("UUID Parse Error: {0}")]
+    #[status(StatusCode::BAD_REQUEST)]
+    UuidParseError(#[from] uuid::Error),
+    #[error("Systemtime: {0}")]
+    #[status(StatusCode::INTERNAL_SERVER_ERROR)]
+    SystemTimeError(#[from] std::time::SystemTimeError),
+    #[error("Send Error: {0}")]
+    #[status(StatusCode::INTERNAL_SERVER_ERROR)]
+    SendError(#[from] tokio::sync::mpsc::error::SendError<Message>),
 }
 
 #[derive(Clone, Debug)]
@@ -155,6 +164,8 @@ async fn main() {
         all_users: Arc::new(DashMap::new()),
         dice_seed_signing_keys: Arc::new(Mutex::new(dice_seed_signing_keys)),
     };
+
+    app_state.queues.insert(Uuid::nil(), Vec::new());
 
     let uuid_clock = ContextV7::new();
 

@@ -276,6 +276,7 @@ let leaderboardData:LeaderBoard = $state(null!);
 
 onMount(async () => {
 	leaderboardData = await fetch(`${backendUrl}/leaderboard`).then(r => r.json());
+	localStorage.setItem("version", "0")
 });
 
 

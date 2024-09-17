@@ -8,6 +8,7 @@
 - proper logging
 - use enums in ws messages
 - look into deadlock
+- Fix not working on firefox lmao webrtc is painful
 
 ## License
 
