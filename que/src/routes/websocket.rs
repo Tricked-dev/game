@@ -1,4 +1,4 @@
-use std::{sync::Arc, time::SystemTime};
+use std::time::SystemTime;
 
 use axum::{
     extract::{
@@ -8,12 +8,11 @@ use axum::{
     Extension,
 };
 use base64::{engine::general_purpose::STANDARD_NO_PAD, prelude::Engine};
-use ed25519_dalek::{Signature, Signer};
+use ed25519_dalek::Signer;
 use futures::{SinkExt, StreamExt};
 use lib_knuckle::{signature_from_string, verifying_key_from_string};
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
 use uuid::Uuid;
 
 use crate::{

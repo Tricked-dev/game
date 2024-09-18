@@ -137,7 +137,7 @@ async function initializePeerConnection(isInitiator:boolean) {
 				},
 			],
     		sdpSemantics: 'unified-plan'
-		}
+		},
 	})
 
 	peerConnection.on('signal', data => {

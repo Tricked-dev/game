@@ -23,8 +23,7 @@ use lib_knuckle::{
 use pool_extractor::DatabaseConnection;
 use rand_core::OsRng;
 use routes::websocket::ws_handler;
-use serde::Deserialize;
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use thiserror::Error;
 use tokio::{fs, signal, sync::Mutex};
 use tokio_postgres::NoTls;
