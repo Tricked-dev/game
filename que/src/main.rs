@@ -94,6 +94,10 @@ impl User {
         self.player_id = Some(player_id);
         self
     }
+    fn set_partner_id(&mut self, partner_id: Uuid) -> &mut Self {
+        self.partner_id = Some(partner_id);
+        self
+    }
 }
 
 #[derive(Clone)]
@@ -101,6 +105,12 @@ struct AppState {
     queues: Arc<DashMap<Uuid, Vec<Uuid>>>,
     all_users: Arc<DashMap<Uuid, User>>,
     dice_seed_signing_keys: Arc<Mutex<SigningKey>>,
+}
+
+impl AppState {
+    fn get_user_clone(&self, user_id: &Uuid) -> Option<User> {
+        self.all_users.get(user_id).map(|v| v.clone())
+    }
 }
 
 pub type SharedContextV7 = Arc<Mutex<ContextV7>>;

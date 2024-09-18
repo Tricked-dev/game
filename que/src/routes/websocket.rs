@@ -185,77 +185,83 @@ pub async fn handle_socket(
 
                         if let Some(partner_user_id) = waiting_users.pop() {
                             tracing::debug!("Partner found!");
-                            let partner_option = state.all_users.get(&partner_user_id);
-                            if let Some(partner_user) = partner_option.map(|v| v.clone())
-                            {
-                                {
-                                    let mut user = state
-                                        .all_users
-                                        .get_mut(&user_id)
-                                        .ok_or_internal(
-                                            "User not in all_users something broke lol",
-                                        )?;
+                            let partner_user =
+                                state.get_user_clone(&partner_user_id).ok_or_internal(
+                                    "Partner not in all_users something broke lol",
+                                )?;
 
-                                    tracing::debug!("{:?} {:?}", &user, &partner_user);
-                                    let seed = rand_core::RngCore::next_u32(&mut csprng);
-                                    let time = std::time::SystemTime::now()
-                                        .duration_since(std::time::UNIX_EPOCH)?
-                                        .as_secs();
+                            let user = state.get_user_clone(&user_id).ok_or_internal(
+                                "User not in all_users something broke lol",
+                            )?;
 
-                                    let user_pub_key = pub_key.to_owned();
-                                    let partner_pub_key = partner_user
-                                        .pub_key
-                                        .clone()
-                                        .ok_or_internal("Partner pub_key not set")?;
+                            tracing::debug!("{:?} {:?}", &user, &partner_user);
+                            let seed = rand_core::RngCore::next_u32(&mut csprng);
+                            let time = std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)?
+                                .as_secs();
 
-                                    let signature =
-                                        state.dice_seed_signing_keys.lock().await.sign(
-                                            format!(
-                                                "{seed}:{time}:{}:{}",
-                                                user_pub_key, partner_pub_key
-                                            )
-                                            .as_bytes(),
-                                        );
-                                    tracing::debug!("Sending Paired");
+                            let user_pub_key = pub_key.to_owned();
+                            let partner_pub_key = partner_user
+                                .pub_key
+                                .clone()
+                                .ok_or_internal("Partner pub_key not set")?;
 
-                                    partner_user.sender.send(
-                                        SendMessages::Paired {
-                                            public_key: partner_pub_key.clone(),
-                                            partner_key: user_pub_key.clone(),
-                                            initiator: false,
-                                            seed,
-                                            signature: STANDARD_NO_PAD
-                                                .encode(signature.to_bytes()),
-                                            time,
-                                        }
-                                        .to_text_message()?,
-                                    )?;
-                                    tracing::debug!("Sending User Text");
-
-                                    tx.send(
-                                        SendMessages::Paired {
-                                            public_key: user_pub_key,
-                                            partner_key: partner_pub_key,
-                                            initiator: true,
-                                            seed,
-                                            signature: STANDARD_NO_PAD
-                                                .encode(signature.to_bytes()),
-                                            time,
-                                        }
-                                        .to_text_message()?,
-                                    )?;
-                                    tracing::debug!("Done sending user text");
-                                    user.partner_id = Some(partner_user_id);
-                                }
-
+                            let game_signature = STANDARD_NO_PAD.encode(
                                 state
-                                    .all_users
-                                    .get_mut(&partner_user_id)
-                                    .ok_or_internal(
-                                        "Partner not in all_users something broke lol",
-                                    )?
-                                    .partner_id = Some(user_id);
-                            }
+                                    .dice_seed_signing_keys
+                                    .lock()
+                                    .await
+                                    .sign(
+                                        format!(
+                                            "{seed}:{time}:{}:{}",
+                                            user_pub_key, partner_pub_key
+                                        )
+                                        .as_bytes(),
+                                    )
+                                    .to_bytes(),
+                            );
+                            tracing::debug!("Sending Paired");
+
+                            partner_user.sender.send(
+                                SendMessages::Paired {
+                                    public_key: partner_pub_key.clone(),
+                                    partner_key: user_pub_key.clone(),
+                                    initiator: false,
+                                    seed,
+                                    signature: game_signature.clone(),
+                                    time,
+                                }
+                                .to_text_message()?,
+                            )?;
+                            tracing::debug!("Sending User Text");
+
+                            tx.send(
+                                SendMessages::Paired {
+                                    public_key: user_pub_key,
+                                    partner_key: partner_pub_key,
+                                    initiator: true,
+                                    seed,
+                                    signature: game_signature,
+                                    time,
+                                }
+                                .to_text_message()?,
+                            )?;
+                            tracing::debug!("Done sending user text");
+
+                            state
+                                .all_users
+                                .get_mut(&user_id)
+                                .ok_or_internal(
+                                    "Partner not in all_users something broke lol",
+                                )?
+                                .set_partner_id(partner_user_id);
+                            state
+                                .all_users
+                                .get_mut(&partner_user_id)
+                                .ok_or_internal(
+                                    "Partner not in all_users something broke lol",
+                                )?
+                                .set_partner_id(user_id);
                         } else {
                             tracing::debug!("Partner not found!");
                             waiting_users.push(user_id);
