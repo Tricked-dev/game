@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
 import { Game, sign_message, type BoardData ,type GameBody, type LeaderBoard} from "./lib/wasmdev/lib_knuckle";
-
+import Peer from "./lib/peer/lite"
 const boardSize = {
 	width: 3,
 	height: 3,
@@ -13,8 +13,7 @@ let gameInfo: Partial<GameBody> & {initiator: boolean} & {[key: string]: string}
 let gameState: BoardData = $state(null!);
 
 let ws: WebSocket;
-let peerConnection: RTCPeerConnection;
-let dataChannel: RTCDataChannel;
+let peerConnection: Peer;
 let dialog: HTMLDialogElement = $state(null!);
 let disconnectedDialog: HTMLDialogElement = $state(null!);
 let waitingDialog: HTMLDialogElement = $state(null!);
@@ -88,27 +87,30 @@ function startChat() {
 
 				// ws.close()
 				break;
-			case "offer":
-				await handleOffer(message as {offer:RTCSessionDescriptionInit});
-				break;
-			case "answer":
-				await peerConnection.setRemoteDescription(
-					new RTCSessionDescription(message.answer),
-				);
-				break;
-			case "ice-candidate":
-				await peerConnection.addIceCandidate(
-					new RTCIceCandidate(message.candidate),
-				);
-				break;
-			case "disconnected":
-				// displayMessage("Your chat partner disconnected.");
-				// resetChat();
-				break;
+			// case "offer":
+			// 	await handleOffer(message as {offer:RTCSessionDescriptionInit});
+			// 	break;
+			// case "answer":
+			// 	await peerConnection.setRemoteDescription(
+			// 		new RTCSessionDescription(message.answer),
+			// 	);
+			// 	break;
+			// case "ice-candidate":
+			// 	await peerConnection.addIceCandidate(
+			// 		new RTCIceCandidate(message.candidate),
+			// 	);
+			// 	break;
+			// case "disconnected":
+			// 	// displayMessage("Your chat partner disconnected.");
+			// 	// resetChat();
+			// 	break;
 			case "disconnect":
 				waitingDialog.close();
 				kickedDialog.showModal();
 				break;
+			default:
+				console.log("Signaling message :", message)
+				peerConnection.signal(message)
 		}
 	};
 
@@ -120,98 +122,32 @@ function startChat() {
 }
 async function initializePeerConnection(isInitiator:boolean) {
 	console.log("INit peer connection");
-	peerConnection = new RTCPeerConnection({
-		iceServers: [
-			{
-				urls: [
-					"stun:stun.l.google.com:19302",
-					"stun:stun1.l.google.com:19302",
-					"stun:stun2.l.google.com:19302",
-				],
-			},
-		],
-	});
 
-	peerConnection.onicecandidate = (event) => {
-		const iceStatus = "Getting further (ICE Candidate)";
-		status = iceStatus;
-		console.log("Sending icecandidate!!!");
-		console.log(event);
-		if (event.candidate) {
-			ws.send(
-				JSON.stringify({
-					type: "ice-candidate",
-					candidate: event.candidate,
-				}),
-			);
+	peerConnection = new Peer({
+		initiator: isInitiator,
+		channelName:"game",
+		config: {
+			iceServers: [
+				{
+					urls: [
+						"stun:stun.l.google.com:19302",
+						"stun:stun1.l.google.com:19302",
+						"stun:stun2.l.google.com:19302",
+					],
+				},
+			],
+    		sdpSemantics: 'unified-plan'
 		}
+	})
 
-		setTimeout(async () => {
-			if (status === iceStatus) {
-				status = "Seems like this is taking a bit too long, requeing";
-				await new Promise((resolve) => setTimeout(resolve, 1500));
-				resetChat();
-				startChat();
-			}
-		}, 5000);
-	};
-	window.pc = peerConnection;
-	peerConnection.addEventListener("connectionstatechange", (event) => {
-		console.log("connectionstatechange", event);
-	});
-	if (isInitiator) {
-		console.log("Creating datachannel");
-		dataChannel = peerConnection.createDataChannel("chat");
-		window.dc = dataChannel;
-		setupDataChannel();
-
-		const offer = await peerConnection.createOffer();
-		console.log("Offer", offer);
-		const answer = await peerConnection.setLocalDescription(offer);
-
+	peerConnection.on('signal', data => {
 		ws.send(
-			JSON.stringify({
-				type: "offer",
-				offer: peerConnection.localDescription,
-			}),
+			JSON.stringify(data)
 		);
-	} else {
-		peerConnection.ondatachannel = (event) => {
-			dataChannel = event.channel;
-			window.dc = dataChannel;
-			setupDataChannel();
-		};
-	}
-}
+	})
 
-async function handleOffer(message: {offer:RTCSessionDescriptionInit}) {
-	await peerConnection.setRemoteDescription(
-		new RTCSessionDescription(message.offer),
-	);
-	const answer = await peerConnection.createAnswer();
-	await peerConnection.setLocalDescription(answer);
-	ws.send(
-		JSON.stringify({
-			type: "answer",
-			answer: peerConnection.localDescription,
-		}),
-	);
-}
 
-function setupDataChannel() {
-	dataChannel.onopen = () => {
-		ws.close();
-		status = undefined;
-	};
-
-	dataChannel.onclose = () => {
-		if (gameState === undefined || gameState?.is_completed) return;
-		status = "Connection closed";
-		disconnectedDialog.showModal();
-		console.log("Datachannel closed");
-	};
-
-	dataChannel.onmessage =async (event) => {
+	let onMessage =async (event:MessageEvent) => {
 		if (event.data instanceof ArrayBuffer) {
 			let data = new Uint8Array(event.data);
 			console.log("Length", data.length);
@@ -225,14 +161,24 @@ function setupDataChannel() {
 			console.log(game.w_add_opponent_move(data));
 			gameState = game.w_get_board_data();
 		}
-		// console.log("Received Data", event);
-		// let data = new Uint8Array(event.data);
-		// console.log(event);
-		// console.log("Received Data", data);
-		// console.log(game.w_add_opponent_move(data));
-		// gameState = game.w_get_board_data();
-	};
+	}
+
+
+	peerConnection.on("connect", () => {
+		console.log("Connected to peer")
+		ws.close();
+		status = undefined;
+		peerConnection._channel.onmessage = onMessage
+	})
+
+	peerConnection.on("disconnect", () => {
+		if (gameState === undefined || gameState?.is_completed) return;
+		status = "Connection closed";
+		disconnectedDialog.showModal();
+		console.log("Datachannel closed");
+	})
 }
+
 
 function resetChat() {
 	if (gameState.decks) {
@@ -252,13 +198,9 @@ function resetChat() {
 	gameState = undefined!;
 	gameInfo = undefined!;
 	try {
-		dataChannel.close();
-	} catch (e) {}
-	try {
-		peerConnection.close();
+		peerConnection.destroy();
 	} catch (e) {}
 	peerConnection = null!;
-	dataChannel = null!;
 }
 $inspect(gameInfo);
 
@@ -528,7 +470,7 @@ $effect(() => {
 
 		<button class="mx-auto mb-10 my-4" onclick={() => {
             const sending = game.w_forfeit();
-            dataChannel.send(sending);
+			peerConnection.send(sending);
 
             gameState = game.w_get_board_data();
         }}>
@@ -570,7 +512,7 @@ $effect(() => {
             }
             const sending = game.w_place(index % boardSize.width);
             console.log("Sending Bytes", sending)
-            dataChannel.send(sending);
+            peerConnection.send(sending);
             gameState = game.w_get_board_data();
             })}
 

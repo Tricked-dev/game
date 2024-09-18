@@ -12,18 +12,20 @@
   "dependencies": {
     "@astrojs/check": "^0.9.3",
     "@astrojs/svelte": "^5.7.0",
-    "@fontsource/pixelify-sans": "^5.1.0",
-    "astro": "^4.14.6",
-    "svelte": "5.0.0-next.243",
-    "typescript": "^5.5.4",
-    "vite": "^5.4.3",
-    "vite-plugin-wasm": "^3.3.0",
     "@biomejs/biome": "1.9.0",
+    "@fontsource/pixelify-sans": "^5.1.0",
+    "@unocss/extractor-svelte": "^0.62.4",
     "@unocss/reset": "^0.62.4",
     "@unocss/transformer-variant-group": "^0.62.4",
+    "astro": "^4.14.6",
+    "streamx": "^2.20.1",
+    "svelte": "5.0.0-next.243",
+    "typescript": "^5.5.4",
     "unocss": "^0.62.4",
-    "@unocss/extractor-svelte": "^0.62.4",
-    "unocss-preset-scrollbar": "^0.3.1"
+    "unocss-preset-scrollbar": "^0.3.1",
+    "vite": "^5.4.3",
+    "vite-plugin-wasm": "^3.3.0",
+    "webrtc-polyfill": "^1.1.8"
   },
   "overrides": {
     "@sveltejs/vite-plugin-svelte": "^4.0.0-next.6"

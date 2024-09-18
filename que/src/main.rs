@@ -197,6 +197,7 @@ async fn main() {
     let app = Router::new()
         .route("/_astro/*file", get(static_handler))
         .route("/assets/*file", get(static_handler))
+        .route("/fonts/*file", get(static_handler))
         .route("/", get(static_handler))
         .route("/index.html", get(static_handler))
         .route("/signup", get(signup))

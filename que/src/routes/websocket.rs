@@ -267,7 +267,10 @@ pub async fn handle_socket(
                             waiting_users.push(user_id);
                         }
                     }
-                    Some("ice-candidate") | Some("offer") | Some("answer") => {
+                    Some("ice-candidate")
+                    | Some("offer")
+                    | Some("answer")
+                    | Some("candidate") => {
                         let partner_id = state
                             .all_users
                             .get(&user_id)
@@ -281,7 +284,9 @@ pub async fn handle_socket(
                             }
                         }
                     }
-                    _ => {}
+                    option => {
+                        dbg!(&option);
+                    }
                 }
             }
         }
