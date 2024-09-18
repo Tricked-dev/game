@@ -12,6 +12,7 @@ use ed25519_dalek::{Signature, Signer};
 use futures::{SinkExt, StreamExt};
 use lib_knuckle::{signature_from_string, verifying_key_from_string};
 use rand_core::OsRng;
+use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 use uuid::Uuid;
 
@@ -31,6 +32,73 @@ pub async fn ws_handler(
             tracing::error!("Error in websocket: {e:?}");
         }
     })
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(tag = "type")]
+enum SendMessages {
+    #[serde(rename = "verify")]
+    Verify { verify_time: String },
+    #[serde(rename = "paired")]
+    Paired {
+        public_key: String,
+        partner_key: String,
+        initiator: bool,
+        seed: u32,
+        signature: String,
+        time: u64,
+    },
+    #[serde(rename = "partner-left")]
+    PartnerLeft,
+    #[serde(rename = "disconnected")]
+    Disconnected { reason: String },
+}
+
+impl SendMessages {
+    fn to_text_message(&self) -> Result<Message, serde_json::Error> {
+        Ok(Message::Text(serde_json::to_string(self)?))
+    }
+}
+
+trait TrickedShenanigans<T> {
+    fn ok_or_badrequest(self, error: &str) -> Result<T, UserCreateError>;
+    fn ok_or_internal(self, error: &str) -> Result<T, UserCreateError>;
+}
+
+impl<T> TrickedShenanigans<T> for Option<T> {
+    fn ok_or_badrequest(self, error: &str) -> Result<T, UserCreateError> {
+        self.ok_or_else(|| UserCreateError::BadRequest(error.to_string()))
+    }
+    fn ok_or_internal(self, error: &str) -> Result<T, UserCreateError> {
+        self.ok_or_else(|| UserCreateError::Internal(error.to_string()))
+    }
+}
+
+fn verify_signature(
+    signature: &str,
+    pub_key: &str,
+    secret: &str,
+) -> Result<(), UserCreateError> {
+    let verify_key =
+        verifying_key_from_string(pub_key).ok_or_badrequest("Invalid verify key")?;
+
+    let signature =
+        signature_from_string(signature).ok_or_badrequest("Invalid signature")?;
+
+    verify_key.verify_strict(secret.as_bytes(), &signature)?;
+
+    Ok(())
+}
+
+async fn resolve_user_name(conn: &Conn, pub_key: &str) -> Result<Uuid, UserCreateError> {
+    let data = conn
+        .query_one(
+            "SELECT player_id FROM players WHERE public_key = $1",
+            &[&STANDARD_NO_PAD.decode(pub_key).unwrap()],
+        )
+        .await?;
+    let id: Uuid = data.get(0);
+    Ok(id)
 }
 
 pub async fn handle_socket(
@@ -57,14 +125,14 @@ pub async fn handle_socket(
         .as_secs();
     state.all_users.insert(user_id, user);
     tracing::debug!("Sending Verify");
+
     sender
-        .send(Message::Text(
-            serde_json::to_string(&serde_json::json!({
-                "type": "verify",
-                "verify_time": secret.to_string()
-            }))
-            .unwrap(),
-        ))
+        .send(
+            SendMessages::Verify {
+                verify_time: secret.to_string(),
+            }
+            .to_text_message()?,
+        )
         .await
         .map_err(|_| UserCreateError::Internal("Failed Sending".to_owned()))?;
 
@@ -81,23 +149,28 @@ pub async fn handle_socket(
     let data_handler = async {
         while let Some(Ok(message)) = receiver.next().await {
             if let Message::Text(text) = message {
-                let data: serde_json::Value = serde_json::from_str(&text).unwrap();
+                let data: serde_json::Value = serde_json::from_str(&text)?;
                 match data["type"].as_str() {
                     Some("join") => {
-                        tracing::debug!("Getting all users");
-                        tracing::debug!("Getting a user");
-                        if !state.all_users.contains_key(&user_id) {
-                            Err(UserCreateError::Internal(
-                                "User not in all_users something broke lol".to_owned(),
-                            ))?;
-                        }
+                        let signature = data["signature"]
+                            .as_str()
+                            .ok_or_badrequest("Missing signature")?;
+                        let pub_key = data["pub_key"]
+                            .as_str()
+                            .ok_or_badrequest("Missing pub_key")?;
 
-                        let signature = data["signature"].as_str().ok_or_else(|| {
-                            UserCreateError::Internal("Missing signature".to_owned())
-                        })?;
-                        let pub_key = data["pub_key"].as_str().ok_or_else(|| {
-                            UserCreateError::Internal("Missing pub_key".to_owned())
-                        })?;
+                        verify_signature(signature, pub_key, &secret.to_string())?;
+
+                        tracing::debug!("Setting pub_key and player_id");
+
+                        state
+                            .all_users
+                            .get_mut(&user_id)
+                            .ok_or_internal("User not in all_users something broke lol")?
+                            .set_pub_key(pub_key.to_owned())
+                            .set_player_id(resolve_user_name(&conn, pub_key).await?);
+
+                        tracing::debug!("Locking queues");
 
                         // default to public queue
                         queue_name = match data["queue"].as_str() {
@@ -105,65 +178,10 @@ pub async fn handle_socket(
                             None => Uuid::nil(),
                         };
 
-                        {
-                            let mut user =
-                                state.all_users.get_mut(&user_id).ok_or_else(|| {
-                                    UserCreateError::Internal(
-                                        "User not in all_users something broke lol"
-                                            .to_owned(),
-                                    )
-                                })?;
-
-                            tracing::debug!("{:?} {:?}", &data, &text);
-
-                            let verify_key = verifying_key_from_string(pub_key)
-                                .ok_or_else(|| {
-                                    UserCreateError::BadRequest(
-                                        "Invalid verify key".to_owned(),
-                                    )
-                                })?;
-                            let signature =
-                                signature_from_string(signature).ok_or_else(|| {
-                                    UserCreateError::BadRequest(
-                                        "Invalid signature".to_owned(),
-                                    )
-                                })?;
-
-                            verify_key.verify_strict(
-                                secret.to_string().as_bytes(),
-                                &signature,
-                            )?;
-                            user.pub_key = Some(pub_key.to_owned());
-                        }
-
-                        let data = conn
-                            .query_one(
-                                "SELECT player_id FROM players WHERE public_key = $1",
-                                &[&STANDARD_NO_PAD.decode(pub_key).unwrap()],
-                            )
-                            .await?;
-                        tracing::debug!("Getting user again");
-                        {
-                            let mut user =
-                                state.all_users.get_mut(&user_id).ok_or_else(|| {
-                                    UserCreateError::Internal(
-                                        "User not in all_users something broke lol"
-                                            .to_owned(),
-                                    )
-                                })?;
-                            tracing::debug!("Success!");
-                            let id: Uuid = data.get(0);
-                            user.player_id = Some(id);
-                        }
-
-                        tracing::debug!("Locking queues");
-
                         let mut waiting_users =
-                            state.queues.get_mut(&queue_name).ok_or_else(|| {
-                                UserCreateError::Internal(
-                                    "Queue not in queues something broke lol".to_owned(),
-                                )
-                            })?;
+                            state.queues.get_mut(&queue_name).ok_or_internal(
+                                "User not in all_users something broke lol",
+                            )?;
 
                         if let Some(partner_user_id) = waiting_users.pop() {
                             tracing::debug!("Partner found!");
@@ -171,33 +189,24 @@ pub async fn handle_socket(
                             if let Some(partner_user) = partner_option.map(|v| v.clone())
                             {
                                 {
-                                    let mut user =
-                                        state.all_users.get_mut(&user_id).ok_or_else(|| {
-                                            UserCreateError::Internal(
-                                                "User not in all_users something broke lol"
-                                                    .to_owned(),
-                                            )
-                                        })?;
+                                    let mut user = state
+                                        .all_users
+                                        .get_mut(&user_id)
+                                        .ok_or_internal(
+                                            "User not in all_users something broke lol",
+                                        )?;
 
                                     tracing::debug!("{:?} {:?}", &user, &partner_user);
                                     let seed = rand_core::RngCore::next_u32(&mut csprng);
                                     let time = std::time::SystemTime::now()
                                         .duration_since(std::time::UNIX_EPOCH)?
                                         .as_secs();
-                                    let user_pub_key =
-                                        user.pub_key.clone().ok_or_else(|| {
-                                            UserCreateError::Internal(
-                                                "User pub_key not set".to_owned(),
-                                            )
-                                        })?;
+
+                                    let user_pub_key = pub_key.to_owned();
                                     let partner_pub_key = partner_user
                                         .pub_key
                                         .clone()
-                                        .ok_or_else(|| {
-                                            UserCreateError::Internal(
-                                                "Partner pub_key not set".to_owned(),
-                                            )
-                                        })?;
+                                        .ok_or_internal("Partner pub_key not set")?;
 
                                     let signature =
                                         state.dice_seed_signing_keys.lock().await.sign(
@@ -208,32 +217,33 @@ pub async fn handle_socket(
                                             .as_bytes(),
                                         );
                                     tracing::debug!("Sending Paired");
-                                    partner_user
-                                    .sender
-                                    .send(Message::Text(
-                                        serde_json::json!({
-                                            "type": "paired",
-                                            "public_key": partner_user.pub_key,
-                                            "partner_key": user.pub_key,
-                                            "initiator": false,
-                                            "seed": seed,
-                                            "signature": STANDARD_NO_PAD.encode(signature.to_bytes()),
-                                            "time": time
-                                        })
-                                        .to_string(),
-                                    ))?;
+
+                                    partner_user.sender.send(
+                                        SendMessages::Paired {
+                                            public_key: partner_pub_key.clone(),
+                                            partner_key: user_pub_key.clone(),
+                                            initiator: false,
+                                            seed,
+                                            signature: STANDARD_NO_PAD
+                                                .encode(signature.to_bytes()),
+                                            time,
+                                        }
+                                        .to_text_message()?,
+                                    )?;
                                     tracing::debug!("Sending User Text");
-                                    tx.send(Message::Text(
-                                        serde_json::json!({"type": "paired",
-                                            "public_key": user.pub_key,
-                                            "partner_key": partner_user.pub_key,
-                                            "initiator": true,
-                                            "seed": seed,
-                                            "signature": STANDARD_NO_PAD.encode(signature.to_bytes()),
-                                            "time": time
-                                        })
-                                        .to_string(),
-                                    ))?;
+
+                                    tx.send(
+                                        SendMessages::Paired {
+                                            public_key: user_pub_key,
+                                            partner_key: partner_pub_key,
+                                            initiator: true,
+                                            seed,
+                                            signature: STANDARD_NO_PAD
+                                                .encode(signature.to_bytes()),
+                                            time,
+                                        }
+                                        .to_text_message()?,
+                                    )?;
                                     tracing::debug!("Done sending user text");
                                     user.partner_id = Some(partner_user_id);
                                 }
@@ -241,12 +251,9 @@ pub async fn handle_socket(
                                 state
                                     .all_users
                                     .get_mut(&partner_user_id)
-                                    .ok_or_else(|| {
-                                        UserCreateError::Internal(
-                                            "Partner not in all_users something broke lol"
-                                                .to_owned(),
-                                        )
-                                    })?
+                                    .ok_or_internal(
+                                        "Partner not in all_users something broke lol",
+                                    )?
                                     .partner_id = Some(user_id);
                             }
                         } else {
@@ -258,12 +265,7 @@ pub async fn handle_socket(
                         let partner_id = state
                             .all_users
                             .get(&user_id)
-                            .ok_or_else(|| {
-                                UserCreateError::Internal(
-                                    "User not in all_users something broke lol"
-                                        .to_owned(),
-                                )
-                            })?
+                            .ok_or_internal("User not in all_users something broke lol")?
                             .partner_id;
                         if let Some(partner_user_id) = partner_id {
                             if let Some(partner_user) =
@@ -284,11 +286,12 @@ pub async fn handle_socket(
 
     if let Err(e) = out {
         tracing::debug!("User disconnected: {e:?}");
-        tx.send(Message::Text(
-            serde_json::json!({"type": "disconnect", "reason": e.to_string()})
-                .to_string(),
-        ))
-        .unwrap();
+        tx.send(
+            SendMessages::Disconnected {
+                reason: e.to_string(),
+            }
+            .to_text_message()?,
+        )?;
     }
     println!("User {:?} disconnected", user_id);
     let partner_id = state.all_users.get(&user_id).unwrap().partner_id;
@@ -296,10 +299,7 @@ pub async fn handle_socket(
         if let Some(partner_user) = state.all_users.get(&partner_user_id) {
             partner_user
                 .sender
-                .send(Message::Text(
-                    serde_json::json!({"type": "disconnected"}).to_string(),
-                ))
-                .unwrap();
+                .send(SendMessages::PartnerLeft.to_text_message()?)?;
         }
     }
     if let Some(mut q) = state.queues.get_mut(&queue_name) {

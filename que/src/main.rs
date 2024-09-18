@@ -72,6 +72,9 @@ pub enum UserCreateError {
     #[error("Send Error: {0}")]
     #[status(StatusCode::INTERNAL_SERVER_ERROR)]
     SendError(#[from] tokio::sync::mpsc::error::SendError<Message>),
+    #[error("Json Error: {0}")]
+    #[status(StatusCode::INTERNAL_SERVER_ERROR)]
+    JsonError(#[from] serde_json::Error),
 }
 
 #[derive(Clone, Debug)]
@@ -81,6 +84,18 @@ struct User {
     pub_key: Option<String>,
     player_id: Option<Uuid>,
 }
+
+impl User {
+    fn set_pub_key(&mut self, pub_key: String) -> &mut Self {
+        self.pub_key = Some(pub_key);
+        self
+    }
+    fn set_player_id(&mut self, player_id: Uuid) -> &mut Self {
+        self.player_id = Some(player_id);
+        self
+    }
+}
+
 #[derive(Clone)]
 struct AppState {
     queues: Arc<DashMap<Uuid, Vec<Uuid>>>,
