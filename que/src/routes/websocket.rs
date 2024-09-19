@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::{
+    ice_servers::{IceServerData, IceServers},
     pool_extractor::{Conn, DatabaseConnection},
     AppState, User, UserCreateError,
 };
@@ -23,11 +24,12 @@ use crate::{
 pub async fn ws_handler(
     ws: WebSocketUpgrade,
     Extension(state): Extension<AppState>,
+    Extension(ice_server_provider): Extension<IceServerData>,
     DatabaseConnection(conn): DatabaseConnection,
 ) -> impl axum::response::IntoResponse {
     tracing::debug!("Got WS connection");
     ws.on_upgrade(|socket| async {
-        if let Err(e) = handle_socket(socket, state, conn).await {
+        if let Err(e) = handle_socket(socket, state, conn, ice_server_provider).await {
             tracing::error!("Error in websocket: {e:?}");
         }
     })
@@ -46,6 +48,7 @@ enum SendMessages {
         seed: u32,
         signature: String,
         time: u64,
+        ice_servers: IceServers,
     },
     #[serde(rename = "partner-left")]
     PartnerLeft,
@@ -104,6 +107,7 @@ pub async fn handle_socket(
     socket: WebSocket,
     state: AppState,
     conn: Conn,
+    ice_server_provider: IceServerData,
 ) -> Result<(), UserCreateError> {
     let (mut sender, mut receiver) = socket.split();
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
@@ -221,6 +225,9 @@ pub async fn handle_socket(
                             );
                             tracing::debug!("Sending Paired");
 
+                            let ice_servers =
+                                ice_server_provider.get_ice_servers().await?;
+
                             partner_user.sender.send(
                                 SendMessages::Paired {
                                     public_key: partner_pub_key.clone(),
@@ -228,6 +235,7 @@ pub async fn handle_socket(
                                     initiator: false,
                                     seed,
                                     signature: game_signature.clone(),
+                                    ice_servers: ice_servers.clone(),
                                     time,
                                 }
                                 .to_text_message()?,
@@ -241,6 +249,7 @@ pub async fn handle_socket(
                                     initiator: true,
                                     seed,
                                     signature: game_signature,
+                                    ice_servers: ice_servers,
                                     time,
                                 }
                                 .to_text_message()?,

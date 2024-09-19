@@ -7,12 +7,16 @@ use axum_thiserror::ErrorStatus;
 use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
+use clap::Parser;
 use dashmap::DashMap;
 use ed25519_dalek::SigningKey;
 use embed::static_handler;
 use http::{
     header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE},
     HeaderValue, StatusCode,
+};
+use ice_servers::{
+    CloudflareIceServerProvider, GoogleIceServerProvider, IceServerProvider,
 };
 use lib_knuckle::{
     api_interfaces::{GameBody, LeaderBoard, LeaderBoardEntry, UserUpdate},
@@ -33,6 +37,7 @@ use uuid::{ContextV7, Timestamp, Uuid};
 
 mod database;
 mod embed;
+mod ice_servers;
 mod pool_extractor;
 mod routes;
 
@@ -74,6 +79,9 @@ pub enum UserCreateError {
     #[error("Json Error: {0}")]
     #[status(StatusCode::INTERNAL_SERVER_ERROR)]
     JsonError(#[from] serde_json::Error),
+    #[error("Reqwest Error: {0}")]
+    #[status(StatusCode::INTERNAL_SERVER_ERROR)]
+    ReqwestError(#[from] reqwest::Error),
 }
 
 #[derive(Clone, Debug)]
@@ -114,8 +122,26 @@ impl AppState {
 
 pub type SharedContextV7 = Arc<Mutex<ContextV7>>;
 
+#[derive(Parser, Debug)]
+struct Args {
+    #[clap(
+        long,
+        env = "DATABASE_STRINGLIKE",
+        default_value = "host=localhost user=postgres password=postgres"
+    )]
+    database_stringlike: String,
+    #[clap(long, env = "TURN_TOKEN_ID")]
+    turn_token_id: Option<String>,
+    #[clap(long, env = "API_TOKEN")]
+    api_token: Option<String>,
+}
+
 #[tokio::main]
 async fn main() {
+    dotenv_rs::dotenv().ok();
+
+    let args = Args::parse();
+
     tracing_subscriber::registry()
         .with(
             tracing_subscriber::EnvFilter::try_from_default_env()
@@ -124,11 +150,21 @@ async fn main() {
         .with(tracing_subscriber::fmt::layer());
     tracing::debug!("connecting to redis");
 
-    let manager = PostgresConnectionManager::new_from_stringlike(
-        "host=localhost user=postgres password=postgres",
-        NoTls,
-    )
-    .unwrap();
+    let ice_server_provider: IceServerProvider =
+        if let (Some(turn_token_id), Some(api_token)) =
+            (args.turn_token_id, args.api_token)
+        {
+            IceServerProvider::Cloudflare(CloudflareIceServerProvider::new(
+                turn_token_id,
+                api_token,
+            ))
+        } else {
+            IceServerProvider::Google(GoogleIceServerProvider)
+        };
+
+    let manager =
+        PostgresConnectionManager::new_from_stringlike(args.database_stringlike, NoTls)
+            .unwrap();
     let pool = Pool::builder().build(manager).await.unwrap();
 
     pool.get_owned()
@@ -207,6 +243,7 @@ async fn main() {
         .with_state(pool)
         .layer(Extension(app_state))
         .layer(Extension(Arc::new(Mutex::new(uuid_clock))))
+        .layer(Extension(Arc::new(ice_server_provider)))
         .layer(
             CorsLayer::new()
                 .allow_origin(AllowOrigin::predicate(
