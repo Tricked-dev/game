@@ -34,11 +34,14 @@ bb8-postgres = "0.8.1"
 bb8 = "0.8.5"
 async-trait = "0.1.82"
 thiserror = "1.0.63"
-syn = "2.0.77"
-quote = "1.0.37"
-proc-macro2 = "1.0.86"
 axum_thiserror = "0.1.0"
 dashmap = { version = "6.1.0", features = ["serde"] }
-reqwest = { version = "0.12.7", default-features = false, features = ["gzip", "zstd", "h2", "trust-dns", "stream", "json", "rustls-tls-native-roots"] }
+reqwest = { version = "0.12.7", default-features = false, features = [
+    "gzip",
+    "h2",
+    "trust-dns",
+    "json",
+    "rustls-tls-native-roots",
+] }
 clap = { version = "4.5.17", features = ["derive", "env", "cargo"] }
 dotenv_rs = { version = "0.16.1" }

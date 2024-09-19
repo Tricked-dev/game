@@ -6,8 +6,10 @@ use crate::UserCreateError;
 
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
 pub struct IceServers {
-    ice_servers: Vec<String>,
+    urls: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     username: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     credential: Option<String>,
 }
 
@@ -56,7 +58,7 @@ pub struct GoogleIceServerProvider;
 impl GoogleIceServerProvider {
     async fn get_ice_servers(&self) -> Result<IceServers, UserCreateError> {
         Ok(IceServers {
-            ice_servers: vec![
+            urls: vec![
                 "stun:stun.l.google.com:19302".to_owned(),
                 "stun:stun1.l.google.com:19302".to_owned(),
                 "stun:stun2.l.google.com:19302".to_owned(),
@@ -86,17 +88,15 @@ impl CloudflareIceServerProvider {
         let response = client
             .post(url)
             .headers(headers)
-            .body(r#"{"ttl":60}"#)
+            .body(r#"{"ttl":900}"#)
             .send()
             .await;
 
         dbg!(&response);
 
         let response = response.map_err(|e| UserCreateError::Internal(e.to_string()))?;
-        // dbg!(response.text().await);
-        // todo!("AAA");
-        let response =
-            serde_json::from_str::<IceServersResponse>(&response.text().await?)?;
+
+        let response = response.json::<IceServersResponse>().await?;
         Ok(response.ice_servers)
     }
 }

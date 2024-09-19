@@ -25,6 +25,7 @@ let status: string | undefined = $state();
 
 let pub_key: string;
 let priv_key: string;
+let ice_servers: RTCIceServer;
 
 function startChat() {
 	waitingDialog.showModal();
@@ -79,6 +80,7 @@ function startChat() {
 					BigInt(message.seed),
 				);
 				gameState = await game.w_get_board_data();
+				ice_servers = message.ice_servers;
 				initializePeerConnection(message.initiator);
 
 				gameInfo = message;
@@ -127,15 +129,7 @@ async function initializePeerConnection(isInitiator:boolean) {
 		initiator: isInitiator,
 		channelName:"game",
 		config: {
-			iceServers: [
-				{
-					urls: [
-						"stun:stun.l.google.com:19302",
-						"stun:stun1.l.google.com:19302",
-						"stun:stun2.l.google.com:19302",
-					],
-				},
-			],
+			iceServers: [ice_servers],
     		sdpSemantics: 'unified-plan'
 		},
 	})
@@ -176,6 +170,9 @@ async function initializePeerConnection(isInitiator:boolean) {
 		status = "Connection closed";
 		disconnectedDialog.showModal();
 		console.log("Datachannel closed");
+	})
+	peerConnection.on("signalingStateChange", (ev) => {
+		console.log("Signaling state change", ev)
 	})
 }
 

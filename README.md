@@ -10,6 +10,12 @@
 - look into deadlock
 - Fix not working on firefox lmao webrtc is painful
 
+## Turn servers
+
+To enable turn servers you need to set the `TURN_TOKEN_ID` and `API_TOKEN` environment variables.
+
+These can be obtained in the new Cloudflare calls dashboard.
+
 ## License
 
 Code is licensed user MPL-2.0
