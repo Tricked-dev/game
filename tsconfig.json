@@ -1,3 +1,7 @@
 {
-  "extends": "astro/tsconfigs/strict"
+  "extends": "astro/tsconfigs/strict",
+  "compilerOptions": {
+    "lib": ["DOM", "ESNext", "DOM.AsyncIterable", "ES2021"],
+    "types": ["vite/client", "./src/env.d.ts"]
+  }
 }

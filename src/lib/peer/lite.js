@@ -1,7 +1,7 @@
 import { RTCIceCandidate, RTCPeerConnection, RTCSessionDescription } from 'webrtc-polyfill'
 import { arr2hex, randomBytes, text2arr } from 'uint8-util'
 
-import { Duplex } from 'streamx'
+import { EventEmitter } from '../eventEmitter'
 /*! simple-peer. MIT License. Feross Aboukhadijeh <https://feross.org/opensource> */
 import errCode from 'err-code'
 
@@ -18,13 +18,12 @@ function warn(message) {
     console.warn(message)
 }
 
-
 /**
  * WebRTC peer connection. Same API as node core `net.Socket`, plus a few extra methods.
  * Duplex stream.
  * @param {Object} opts
  */
-class Peer extends Duplex {
+class Peer extends EventEmitter {
     /** @type {RTCPeerConnection} */
     _pc
     constructor(opts) {
@@ -286,8 +285,11 @@ class Peer extends Duplex {
         cb(null)
     }
 
+    destroy(error) {
+        this._destroy(error || new Error("Manually destroyed"))
+    }
+
     __destroy(err) {
-        this.end()
         this._destroy(() => { }, err)
     }
 
@@ -373,9 +375,9 @@ class Peer extends Duplex {
         this._channel.onopen = () => {
             this._onChannelOpen()
         }
-        this._channel.onclose = () => {
-            this._onChannelClose()
-        }
+        // this._channel.onclose = () => {
+        //     this._onChannelClose()
+        // }
         this._channel.onerror = event => {
             const err = event.error instanceof Error
                 ? event.error
@@ -396,27 +398,6 @@ class Peer extends Duplex {
         }, CHANNEL_CLOSING_TIMEOUT)
     }
 
-    _write(chunk, cb) {
-        if (this.destroyed) return cb(errCode(new Error('cannot write after peer is destroyed'), 'ERR_DATA_CHANNEL'))
-
-        if (this._connected) {
-            try {
-                this.send(chunk)
-            } catch (err) {
-                return this.__destroy(errCode(err, 'ERR_DATA_CHANNEL'))
-            }
-            if (this._channel.bufferedAmount > MAX_BUFFERED_AMOUNT) {
-                this._debug('start backpressure: bufferedAmount %d', this._channel.bufferedAmount)
-                this._cb = cb
-            } else {
-                cb(null)
-            }
-        } else {
-            this._debug('write before connect')
-            this._chunk = chunk
-            this._cb = cb
-        }
-    }
 
     // When stream finishes writing, close socket. Half open connections are not
     // supported.
@@ -839,7 +820,7 @@ class Peer extends Duplex {
     _debug() {
         const args = [].slice.call(arguments)
         args[0] = '[' + this._id + '] ' + args[0]
-        console.log(args)
+        // console.log(args)
         // Debug.apply(null, args)
     }
 }

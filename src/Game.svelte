@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
 import { Game, sign_message, type BoardData ,type GameBody, type LeaderBoard} from "./lib/wasmdev/lib_knuckle";
-import Peer from "./lib/peer/lite"
+import Peer, { type PeerSignalData } from "./lib/peer/lite"
 const boardSize = {
 	width: 3,
 	height: 3,
@@ -82,37 +82,20 @@ function startChat() {
 				gameState = await game.w_get_board_data();
 				ice_servers = message.ice_servers;
 				initializePeerConnection(message.initiator);
-
+				//@ts-ignore -
 				gameInfo = message;
-
 				window.game = game;
 
 				// ws.close()
 				break;
-			// case "offer":
-			// 	await handleOffer(message as {offer:RTCSessionDescriptionInit});
-			// 	break;
-			// case "answer":
-			// 	await peerConnection.setRemoteDescription(
-			// 		new RTCSessionDescription(message.answer),
-			// 	);
-			// 	break;
-			// case "ice-candidate":
-			// 	await peerConnection.addIceCandidate(
-			// 		new RTCIceCandidate(message.candidate),
-			// 	);
-			// 	break;
-			// case "disconnected":
-			// 	// displayMessage("Your chat partner disconnected.");
-			// 	// resetChat();
-			// 	break;
 			case "disconnect":
+				//TODO: handle error message
 				waitingDialog.close();
 				kickedDialog.showModal();
 				break;
 			default:
 				console.log("Signaling message :", message)
-				peerConnection.signal(message)
+				peerConnection.signal(message as unknown as PeerSignalData)
 		}
 	};
 
@@ -157,15 +140,38 @@ async function initializePeerConnection(isInitiator:boolean) {
 		}
 	}
 
+	let onChannelClose = async () => {
+		peerConnection.destroy();
+		if (gameState === undefined || gameState?.is_completed) {
+			return
+		}
+		status = "Connection closed";
+		disconnectedDialog.showModal();
+		console.log("Datachannel closed");
+	}
+
 
 	peerConnection.on("connect", () => {
 		console.log("Connected to peer")
 		ws.close();
 		status = undefined;
 		peerConnection._channel.onmessage = onMessage
+		peerConnection._channel.onclose = onChannelClose
+	})
+	peerConnection.on("close", () => {
+		console.log("Closed")
+	})
+
+	peerConnection.on("error", (e) => {
+		console.log("Error", e)
+	})
+
+	peerConnection.on("end" , () => {
+		console.log("End!")
 	})
 
 	peerConnection.on("disconnect", () => {
+		console.log("Disconnected")
 		if (gameState === undefined || gameState?.is_completed) return;
 		status = "Connection closed";
 		disconnectedDialog.showModal();
@@ -199,7 +205,6 @@ function resetChat() {
 	} catch (e) {}
 	peerConnection = null!;
 }
-$inspect(gameInfo);
 
 $effect(() => {
 	if (gameState?.is_completed) {
@@ -259,11 +264,6 @@ let highLightsOther = $derived(formatIntoColumnsCountPerColumn(gameState?.decks.
 
 let name = $state("");
 
-$effect(() => {
-	console.log({...highLightsMine});
-	console.log({...highLightsOther});
-});
-
 </script>
 
 <svelte:options runes={true} ></svelte:options>
@@ -294,7 +294,7 @@ $effect(() => {
   {#each deck ?? [] as row, index}
      {@const occurrences = highLights[(index % 3)]?.[row] ?? 0}
     <button
-        class="size-28 flex justify-center text-center text-3xl p-4 {row == 0 ? 'hover:brightness-110' : ""}"
+        class="md:size-28 size-20 flex justify-center text-center text-3xl p-4 {row == 0 ? 'hover:brightness-110' : ""}"
         onclick={() => {
             console.log("Dropped")
             onclick(index)}}
@@ -314,7 +314,7 @@ $effect(() => {
   {#each points ?? [] as row}
   <div class="flex justify-center">
     <div
-        class="size-20 flex justify-center text-white text-center text-3xl"
+        class="md:size-20 size-12 flex justify-center text-white text-center text-3xl"
         style:background-image="url(/assets/number-base.png)"
         style:background-size="cover"
 
@@ -453,12 +453,6 @@ $effect(() => {
 
 <div class="flex gap-4 mx-auto">
     <div class="ml-auto">
-        <!-- Next dice {gameState?.next_dice}<br /> -->
-        <!-- Seq {gameState?.seq}<br /> -->
-        <!-- Starting: {gameInfo?.initiator}<br /> -->
-        <!-- Your id {gameInfo?.public_key?.slice(0,5)}<br/> -->
-        <!-- Partner id {gameInfo?.partner_key?.slice(0,5)}<br/> -->
-
         <div class="flex flex-col justify-center">
 			<div class="">
 

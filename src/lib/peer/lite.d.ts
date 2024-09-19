@@ -5,7 +5,7 @@ import type {
   RTCIceCandidate,
 } from "webrtc-polyfill";
 
-interface PeerOptions {
+export interface PeerOptions {
   initiator?: boolean;
   channelName?: string;
   channelConfig?: RTCDataChannelInit;
@@ -19,7 +19,7 @@ interface PeerOptions {
   objectMode?: boolean;
 }
 
-interface PeerSignalData {
+export interface PeerSignalData {
   type: string;
   sdp?: string;
   candidate?: RTCIceCandidate;

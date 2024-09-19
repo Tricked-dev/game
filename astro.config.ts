@@ -49,14 +49,6 @@ export default defineConfig({
     },
   ],
   vite: {
-    server: {
-      host: "127.0.0.1",
-    },
-    resolve: {
-      alias: {
-        events: "./src/lib/eventEmitter.js",
-      },
-    },
     plugins: [wasm()],
   },
 });

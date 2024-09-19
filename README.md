@@ -4,11 +4,8 @@
 
 - Ui improvements
 - Backend service to store results in
-- Better error handling
 - proper logging
-- use enums in ws messages
 - look into deadlock
-- Fix not working on firefox lmao webrtc is painful
 
 ## Turn servers
 
