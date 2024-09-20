@@ -1,9 +1,4 @@
-import {
-  presetUno,
-  transformerCompileClass,
-  transformerDirectives,
-  transformerVariantGroup,
-} from "unocss";
+import { presetUno, transformerCompileClass, transformerDirectives, transformerVariantGroup } from "unocss";
 
 import UnoCSS from "unocss/astro";
 import { defineConfig } from "astro/config";

@@ -1,610 +1,630 @@
+<svelte:options runes={true} />
+
 <script lang="ts">
   import { onMount } from "svelte";
-import { Game, sign_message, type BoardData ,type GameBody, type LeaderBoard} from "./lib/wasmdev/lib_knuckle";
-import Peer, { type PeerSignalData } from "./lib/peer/lite"
-const boardSize = {
-	width: 3,
-	height: 3,
-};
-let backendUrl = import.meta.env.DEV ? "http://localhost:8083" : '';
+  import { Game, sign_message, type BoardData, type GameBody, type LeaderBoard } from "./lib/wasmdev/lib_knuckle";
+  import Peer, { type PeerSignalData } from "./lib/peer/lite";
+  const boardSize = {
+    width: 3,
+    height: 3,
+  };
+  let backendUrl = import.meta.env.DEV ? "http://localhost:8083" : "";
 
-let game: Game;
-let gameInfo: Partial<GameBody> & {initiator: boolean} & {[key: string]: string} = $state(null!);
-let gameState: BoardData = $state(null!);
+  let game: Game;
+  let gameInfo: Partial<GameBody> & { initiator: boolean } & {
+    [key: string]: string;
+  } = $state(null!);
+  let gameState: BoardData = $state(null!);
 
-let ws: WebSocket;
-let peerConnection: Peer;
-let dialog: HTMLDialogElement = $state(null!);
-let disconnectedDialog: HTMLDialogElement = $state(null!);
-let waitingDialog: HTMLDialogElement = $state(null!);
-let kickedDialog: HTMLDialogElement = $state(null!);
-let userDialog: HTMLDialogElement = $state(null!);
+  let ws: WebSocket;
+  let peerConnection: Peer;
+  let dialog: HTMLDialogElement = $state(null!);
+  let disconnectedDialog: HTMLDialogElement = $state(null!);
+  let waitingDialog: HTMLDialogElement = $state(null!);
+  let kickedDialog: HTMLDialogElement = $state(null!);
+  let userDialog: HTMLDialogElement = $state(null!);
 
+  let status: string | undefined = $state();
 
-let status: string | undefined = $state();
+  let pub_key: string;
+  let priv_key: string;
+  let ice_servers: RTCIceServer;
+  let wasm = $state(true);
 
-let pub_key: string;
-let priv_key: string;
-let ice_servers: RTCIceServer;
-let wasm = $state(true)
+  function startChat() {
+    waitingDialog.showModal();
+    status = "Starting Connection";
 
-function startChat() {
-	waitingDialog.showModal();
-	status = "Starting Connection";
-
-	if (import.meta.env.DEV) {
-		ws = new WebSocket("ws://localhost:8083/ws");
-	} else {
-		ws = new WebSocket(`${window.origin.replace("http", "ws")}/ws`);
-	}
-
-	ws.onopen = () => {};
-
-	ws.onmessage = async (event) => {
-		let message:Record<string, any>;
-
-		try {
-			message = JSON.parse(event.data);
-		} catch (e) {
-			const data = new TextDecoder().decode(await event.data.arrayBuffer());
-			message = JSON.parse(data);
-		}
-		console.log("WS MSG", message);
-		switch (message.type) {
-			case "verify": {
-                const userInfo = import.meta.env.DEV ? localStorage.getItem("userInfo") : null;
-				let json = userInfo ? JSON.parse(userInfo) : await fetch(`${backendUrl}/signup`).then(r => r.json());
-                localStorage.setItem("userInfo", JSON.stringify(json));
-				const private_key = json.priv_key;
-				const response = await sign_message(private_key, message.verify_time);
-				ws.send(
-					JSON.stringify({
-						type: "join",
-						signature: response,
-						pub_key: json.pub_key,
-					}),
-				);
-				pub_key = json.pub_key;
-				priv_key = private_key;
-				break;
-            }
-			case "paired":
-				waitingDialog.close();
-				status = "Verified";
-				game = new Game(
-					pub_key,
-					priv_key,
-					message.partner_key,
-					boardSize.width,
-					boardSize.height,
-					message.initiator,
-					BigInt(message.seed),
-				);
-				gameState = await game.w_get_board_data();
-				ice_servers = message.ice_servers;
-				initializePeerConnection(message.initiator);
-				//@ts-ignore -
-				gameInfo = message;
-				window.game = game;
-
-				// ws.close()
-				break;
-			case "disconnect":
-				//TODO: handle error message
-				waitingDialog.close();
-				kickedDialog.showModal();
-				break;
-			default:
-				console.log("Signaling message :", message)
-				peerConnection.signal(message as unknown as PeerSignalData)
-		}
-	};
-
-	ws.onclose = () => {
-		if (gameState !== undefined) return;
-		waitingDialog.close();
-		kickedDialog.showModal();
-	};
-}
-async function initializePeerConnection(isInitiator:boolean) {
-	console.log("INit peer connection");
-
-	peerConnection = new Peer({
-		initiator: isInitiator,
-		channelName:"game",
-		config: {
-			iceServers: [ice_servers],
-    		sdpSemantics: 'unified-plan'
-		},
-	})
-
-	peerConnection.on('signal', data => {
-		ws.send(
-			JSON.stringify(data)
-		);
-	})
-
-
-	let onMessage =async (event:MessageEvent) => {
-		if (event.data instanceof ArrayBuffer) {
-			let data = new Uint8Array(event.data);
-			console.log("Length", data.length);
-			console.log(data)
-			console.log(game.w_add_opponent_move(data));
-			gameState = game.w_get_board_data();
-		} else if (event.data instanceof Blob) {
-			let data = new Uint8Array(await event.data.arrayBuffer());
-			console.log("Length", data.length);
-			console.log(data)
-			console.log(game.w_add_opponent_move(data));
-			gameState = game.w_get_board_data();
-		}
-	}
-
-	let onChannelClose = async () => {
-		peerConnection.destroy();
-		if (gameState === undefined || gameState?.is_completed) {
-			return
-		}
-		status = "Connection closed";
-		disconnectedDialog.showModal();
-		console.log("Datachannel closed");
-	}
-
-
-	peerConnection.on("connect", () => {
-		console.log("Connected to peer")
-		ws.close();
-		status = undefined;
-		peerConnection._channel.onmessage = onMessage
-		peerConnection._channel.onclose = onChannelClose
-	})
-	peerConnection.on("close", () => {
-		console.log("Closed")
-	})
-
-	peerConnection.on("error", (e) => {
-		console.log("Error", e)
-	})
-
-	peerConnection.on("end" , () => {
-		console.log("End!")
-	})
-
-	peerConnection.on("disconnect", () => {
-		console.log("Disconnected")
-		if (gameState === undefined || gameState?.is_completed) return;
-		status = "Connection closed";
-		disconnectedDialog.showModal();
-		console.log("Datachannel closed");
-	})
-	peerConnection.on("signalingStateChange", (ev) => {
-		console.log("Signaling state change", ev)
-	})
-}
-
-
-function resetChat() {
-	if (gameState.decks) {
-		gameState.decks.me = undefined!;
-		gameState.decks.other = undefined!;
-	}
-	if (gameState) {
-		gameState.decks = undefined!;
-		gameState.points = undefined!;
-	}
-	try {
-		game.free();
-	} catch (e) {
-		// oh well
-	}
-
-	gameState = undefined!;
-	gameInfo = undefined!;
-	try {
-		peerConnection.destroy();
-	} catch (e) {}
-	peerConnection = null!;
-}
-
-$effect(() => {
-	if (gameState?.is_completed) {
-		dialog.showModal();
-		(async () => {
-			const body: GameBody = {
-				seed: gameInfo!.seed! ,
-				time: gameInfo!.time! ,
-				your_key: gameInfo?.public_key!,
-				opponent_key: gameInfo?.partner_key!,
-				starting: gameInfo?.initiator!,
-				signature: gameInfo?.signature!,
-				moves: gameState.history,
-			};
-			console.log(body);
-			await fetch(`${backendUrl}/submit_game`, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify(body),
-			});
-		})();
-	}
-});
-
-
-let leaderboardData:LeaderBoard = $state(null!);
-
-onMount(async () => {
-
-	const supported = (() => {
-    try {
-        if (typeof WebAssembly === "object"
-            && typeof WebAssembly.instantiate === "function") {
-            const module = new WebAssembly.Module(Uint8Array.of(0x0, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00));
-            if (module instanceof WebAssembly.Module)
-                return new WebAssembly.Instance(module) instanceof WebAssembly.Instance;
-        }
-    } catch (e) {
+    if (import.meta.env.DEV) {
+      ws = new WebSocket("ws://localhost:8083/ws");
+    } else {
+      ws = new WebSocket(`${window.origin.replace("http", "ws")}/ws`);
     }
-    return false;
-})();
-wasm=supported;
 
-	leaderboardData = await fetch(`${backendUrl}/leaderboard`).then(r => r.json());
-	localStorage.setItem("version", "0")
-});
+    ws.onopen = () => {};
 
+    ws.onmessage = async (event) => {
+      let message: Record<string, any>;
 
-function formatIntoColumnsCountPerColumn(arr:number[], width:number) {
+      try {
+        message = JSON.parse(event.data);
+      } catch (e) {
+        const data = new TextDecoder().decode(await event.data.arrayBuffer());
+        message = JSON.parse(data);
+      }
+      console.log("WS MSG", message);
+      switch (message.type) {
+        case "verify": {
+          const userInfo = import.meta.env.DEV ? localStorage.getItem("userInfo") : null;
+          let json = userInfo ? JSON.parse(userInfo) : await fetch(`${backendUrl}/signup`).then((r) => r.json());
+          localStorage.setItem("userInfo", JSON.stringify(json));
+          const private_key = json.priv_key;
+          const response = await sign_message(private_key, message.verify_time);
+          ws.send(
+            JSON.stringify({
+              type: "join",
+              signature: response,
+              pub_key: json.pub_key,
+            }),
+          );
+          pub_key = json.pub_key;
+          priv_key = private_key;
+          break;
+        }
+        case "paired":
+          waitingDialog.close();
+          status = "Verified";
+          game = new Game(
+            pub_key,
+            priv_key,
+            message.partner_key,
+            boardSize.width,
+            boardSize.height,
+            message.initiator,
+            BigInt(message.seed),
+          );
+          gameState = await game.w_get_board_data();
+          ice_servers = message.ice_servers;
+          initializePeerConnection(message.initiator);
+          //@ts-ignore -
+          gameInfo = message;
+          window.game = game;
+
+          // ws.close()
+          break;
+        case "disconnect":
+          //TODO: handle error message
+          waitingDialog.close();
+          kickedDialog.showModal();
+          break;
+        default:
+          console.log("Signaling message :", message);
+          peerConnection.signal(message as unknown as PeerSignalData);
+      }
+    };
+
+    ws.onclose = () => {
+      if (gameState !== undefined) return;
+      waitingDialog.close();
+      kickedDialog.showModal();
+    };
+  }
+  async function initializePeerConnection(isInitiator: boolean) {
+    console.log("INit peer connection");
+
+    peerConnection = new Peer({
+      initiator: isInitiator,
+      channelName: "game",
+      config: {
+        iceServers: [ice_servers],
+        sdpSemantics: "unified-plan",
+      },
+    });
+
+    peerConnection.on("signal", (data) => {
+      ws.send(JSON.stringify(data));
+    });
+
+    let onMessage = async (event: MessageEvent) => {
+      if (event.data instanceof ArrayBuffer) {
+        let data = new Uint8Array(event.data);
+        console.log("Length", data.length);
+        console.log(data);
+        console.log(game.w_add_opponent_move(data));
+        gameState = game.w_get_board_data();
+      } else if (event.data instanceof Blob) {
+        let data = new Uint8Array(await event.data.arrayBuffer());
+        console.log("Length", data.length);
+        console.log(data);
+        console.log(game.w_add_opponent_move(data));
+        gameState = game.w_get_board_data();
+      }
+    };
+
+    let onChannelClose = async () => {
+      peerConnection.destroy();
+      if (gameState === undefined || gameState?.is_completed) {
+        return;
+      }
+      status = "Connection closed";
+      disconnectedDialog.showModal();
+      console.log("Datachannel closed");
+    };
+
+    peerConnection.on("connect", () => {
+      console.log("Connected to peer");
+      ws.close();
+      status = undefined;
+      peerConnection._channel.onmessage = onMessage;
+      peerConnection._channel.onclose = onChannelClose;
+    });
+    peerConnection.on("close", () => {
+      console.log("Closed");
+    });
+
+    peerConnection.on("error", (e) => {
+      console.log("Error", e);
+    });
+
+    peerConnection.on("end", () => {
+      console.log("End!");
+    });
+
+    peerConnection.on("disconnect", () => {
+      console.log("Disconnected");
+      if (gameState === undefined || gameState?.is_completed) return;
+      status = "Connection closed";
+      disconnectedDialog.showModal();
+      console.log("Datachannel closed");
+    });
+    peerConnection.on("signalingStateChange", (ev) => {
+      console.log("Signaling state change", ev);
+    });
+  }
+
+  function resetChat() {
+    if (gameState.decks) {
+      gameState.decks.me = undefined!;
+      gameState.decks.other = undefined!;
+    }
+    if (gameState) {
+      gameState.decks = undefined!;
+      gameState.points = undefined!;
+    }
+    try {
+      game.free();
+    } catch (e) {
+      // oh well
+    }
+
+    gameState = undefined!;
+    gameInfo = undefined!;
+    try {
+      peerConnection.destroy();
+    } catch (e) {}
+    peerConnection = null!;
+  }
+
+  $effect(() => {
+    if (gameState?.is_completed) {
+      dialog.showModal();
+      (async () => {
+        const body: GameBody = {
+          seed: gameInfo!.seed!,
+          time: gameInfo!.time!,
+          your_key: gameInfo?.public_key!,
+          opponent_key: gameInfo?.partner_key!,
+          starting: gameInfo?.initiator!,
+          signature: gameInfo?.signature!,
+          moves: gameState.history,
+        };
+        console.log(body);
+        await fetch(`${backendUrl}/submit_game`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify(body),
+        });
+      })();
+    }
+  });
+
+  let leaderboardData: LeaderBoard = $state(null!);
+
+  onMount(async () => {
+    const supported = (() => {
+      try {
+        if (typeof WebAssembly === "object" && typeof WebAssembly.instantiate === "function") {
+          const module = new WebAssembly.Module(Uint8Array.of(0x0, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00));
+          if (module instanceof WebAssembly.Module)
+            return new WebAssembly.Instance(module) instanceof WebAssembly.Instance;
+        }
+      } catch (e) {}
+      return false;
+    })();
+    wasm = supported;
+
+    leaderboardData = await fetch(`${backendUrl}/leaderboard`).then((r) => r.json());
+    localStorage.setItem("version", "0");
+  });
+
+  function formatIntoColumnsCountPerColumn(arr: number[], width: number) {
     if (width <= 0 || !arr || arr.length === 0) return [];
-    
-    const result: Record<string|number, number>[] = new Array(width).fill(null).map(() => ({}));
+
+    const result: Record<string | number, number>[] = new Array(width).fill(null).map(() => ({}));
     const height = Math.ceil(arr.length / width);
 
     for (let i = 0; i < arr.length; i++) {
-        const col = i % width;
-        const value = arr[i];
-        if (result[col][value]) {
-            result[col][value]++;
-        } else {
-            result[col][value] = 1;
-        }
+      const col = i % width;
+      const value = arr[i];
+      if (result[col][value]) {
+        result[col][value]++;
+      } else {
+        result[col][value] = 1;
+      }
     }
-    
+
     return result;
-}
+  }
 
-let highLightsMine = $derived(formatIntoColumnsCountPerColumn(gameState?.decks.me ?? [], 3));
-let highLightsOther = $derived(formatIntoColumnsCountPerColumn(gameState?.decks.other ?? [], 3));
+  let highLightsMine = $derived(formatIntoColumnsCountPerColumn(gameState?.decks.me ?? [], 3));
+  let highLightsOther = $derived(formatIntoColumnsCountPerColumn(gameState?.decks.other ?? [], 3));
 
-let name = $state("");
-
+  let name = $state("");
 </script>
 
-<svelte:options runes={true} ></svelte:options>
-
 {#snippet dice(number: number, occurrences: number)}
-<style>
-	.glow-yellow {
-    filter: drop-shadow(0 0 10px yellow);
-}
+  <style>
+    .glow-yellow {
+      filter: drop-shadow(0 0 10px yellow);
+    }
 
-.glow-red {
-    filter: drop-shadow(0 0 10px red);
-}
-</style>
-{@const color = occurrences == 2 ? "glow-yellow" : occurrences == 3 ? "glow-red" : ""}
-    <div class="relative w-full h-full">
-
-        {#if number != 0}
-            <img src="/assets/dices-base.png" alt="dice" class="absolute left-0 top-0 h-full w-full {color}" draggable="false">
-            <img src="/assets/dices-{number}.png" alt="dice" class="absolute left-0 top-0 h-full w-full"
-            draggable="false"
-            >
-        {/if}
-    </div>
+    .glow-red {
+      filter: drop-shadow(0 0 10px red);
+    }
+  </style>
+  {@const color = occurrences == 2 ? "glow-yellow" : occurrences == 3 ? "glow-red" : ""}
+  <div class="relative w-full h-full">
+    {#if number != 0}
+      <img
+        src="/assets/dices-base.png"
+        alt="dice"
+        class="absolute left-0 top-0 h-full w-full {color}"
+        draggable="false"
+      />
+      <img src="/assets/dices-{number}.png" alt="dice" class="absolute left-0 top-0 h-full w-full" draggable="false" />
+    {/if}
+  </div>
 {/snippet}
 
-{#snippet diceLayout(deck: number[], points: number[], highLights: ReturnType<typeof formatIntoColumnsCountPerColumn>, onclick: any)}
+{#snippet diceLayout(
+  deck: number[],
+  points: number[],
+  highLights: ReturnType<typeof formatIntoColumnsCountPerColumn>,
+  onclick: any,
+)}
   {#each deck ?? [] as row, index}
-     {@const occurrences = highLights[(index % 3)]?.[row] ?? 0}
+    {@const occurrences = highLights[index % 3]?.[row] ?? 0}
     <button
-        class="md:size-28 size-20 flex justify-center text-center text-3xl p-4 {row == 0 ? 'hover:brightness-110' : ""}"
-        onclick={() => {
-            console.log("Dropped")
-            onclick(index)}}
-        ondrop={() => onclick(index)}
-        ondragover={(event) => {
-
-          event.preventDefault();
-    event.dataTransfer!.dropEffect = 'copy';}}
-
-        style:background-image="url(/assets/dice-bg.png)"
-        style:background-size="cover"
-        >
-        {@render dice(row, occurrences)}
+      class="md:size-28 size-20 flex justify-center text-center text-3xl p-4 {row == 0 ? 'hover:brightness-110' : ''}"
+      onclick={() => {
+        console.log("Dropped");
+        onclick(index);
+      }}
+      ondrop={() => onclick(index)}
+      ondragover={(event) => {
+        event.preventDefault();
+        event.dataTransfer!.dropEffect = "copy";
+      }}
+      style:background-image="url(/assets/dice-bg.png)"
+      style:background-size="cover"
+    >
+      {@render dice(row, occurrences)}
     </button>
   {/each}
   {#each points ?? [] as row}
-  <div class="flex justify-center">
-    <div
+    <div class="flex justify-center">
+      <div
         class="md:size-20 size-12 flex justify-center text-white text-center text-3xl"
         style:background-image="url(/assets/number-base.png)"
         style:background-size="cover"
-
-        >
+      >
         <div class="m-auto">
-        {row}
-
+          {row}
         </div>
+      </div>
     </div>
-  </div>
-
   {/each}
 {/snippet}
 
-
-
-
 <dialog bind:this={dialog} class="bg-transparent text-white">
-    <div class="flex flex-col h-[50rem] w-[20rem]">
-    <img src="/assets/ending-base.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}">
+  <div class="flex flex-col h-[50rem] w-[20rem]">
+    <img src="/assets/ending-base.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}" />
     {#if gameState?.winner.winner}
-        <img src="/assets/ending-win.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}">
+      <img src="/assets/ending-win.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}" />
     {:else if gameState?.winner?.win_by_tie}
-        <img src="/assets/ending-draw.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}">
+      <img src="/assets/ending-draw.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}" />
     {:else}
-        <img src="/assets/ending-lose.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}">
+      <img src="/assets/ending-lose.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}" />
     {/if}
     <div class="w-full h-full z-10 absolute left-0 top-0 flex flex-col justify-center items-center">
-        <div class="ml-4 absolute left-0 top-48 text-5xl  flex text-nowrap">
-            <img src="/assets/end-texts-your.png" class="h-10" alt="">: {gameState?.points?.me?.reduce((a, b) => a + b, 0)}
-        </div>
-        <div class="ml-4 absolute left-0 top-60 text-5xl  flex text-nowrap">
-          <img src="/assets/end-texts-opponent.png" alt="" class="h-10">:  {gameState?.points?.other?.reduce((a, b) => a + b, 0)}
-        </div>
-        <div class="ml-4 absolute left-0 top-72 text-5xl  flex terxt-nowrap">
-           <img src="/assets/end-texts-total.png" class="h-10" alt="">: {gameState?.seq}
-        </div>
-    <button class="mt-auto mx-auto mb-10" onclick={() => {
-       resetChat();
-       dialog.close();
-    }}>
-    <img src="/assets/start-again.png" alt="" class="hover:brightness-110" >
-    </button>
+      <div class="ml-4 absolute left-0 top-48 text-5xl flex text-nowrap">
+        <img src="/assets/end-texts-your.png" class="h-10" alt="" />: {gameState?.points?.me?.reduce(
+          (a, b) => a + b,
+          0,
+        )}
+      </div>
+      <div class="ml-4 absolute left-0 top-60 text-5xl flex text-nowrap">
+        <img src="/assets/end-texts-opponent.png" alt="" class="h-10" />: {gameState?.points?.other?.reduce(
+          (a, b) => a + b,
+          0,
+        )}
+      </div>
+      <div class="ml-4 absolute left-0 top-72 text-5xl flex terxt-nowrap">
+        <img src="/assets/end-texts-total.png" class="h-10" alt="" />: {gameState?.seq}
+      </div>
+      <button
+        class="mt-auto mx-auto mb-10"
+        onclick={() => {
+          resetChat();
+          dialog.close();
+        }}
+      >
+        <img src="/assets/start-again.png" alt="" class="hover:brightness-110" />
+      </button>
     </div>
-
-    </div>
-
+  </div>
 </dialog>
 
 <dialog bind:this={disconnectedDialog} class=":uno: bg-transparent text-white">
-    Your opponent disconnected, Please start a new game.
-    <button onclick={() => {
-       resetChat();
-       disconnectedDialog.close();
-    }}>Return to start</button>
+  Your opponent disconnected, Please start a new game.
+  <button
+    onclick={() => {
+      resetChat();
+      disconnectedDialog.close();
+    }}>Return to start</button
+  >
 </dialog>
 
-<dialog bind:this={waitingDialog} class=":uno: bg-transparent text-white outline-none" >
-	<div class="flex flex-col z-50">
+<dialog bind:this={waitingDialog} class=":uno: bg-transparent text-white outline-none">
+  <div class="flex flex-col z-50">
     Waiting for a opponent to join.
-	<img src="/assets/waiting.png" alt="" class="" >
-	</div>
+    <img src="/assets/waiting.png" alt="" class="" />
+  </div>
 </dialog>
 
-<dialog bind:this={kickedDialog} class=":uno: bg-transparent text-white outline-none" >
-    You were kicked from the game. This is probably because you joined the queue on another device/tab
+<dialog bind:this={kickedDialog} class=":uno: bg-transparent text-white outline-none">
+  You were kicked from the game. This is probably because you joined the queue on another device/tab
 </dialog>
 
-<dialog bind:this={userDialog} class=":uno: bg-transparent text-white outline-none w-[40rem] h-[70rem]" >
-	<img src="/assets/options.png" alt="" class=":uno: absolute left-0 top-0 h-full w-full aspect-[2/5]">
+<dialog bind:this={userDialog} class=":uno: bg-transparent text-white outline-none w-[40rem] h-[70rem]">
+  <img src="/assets/options.png" alt="" class=":uno: absolute left-0 top-0 h-full w-full aspect-[2/5]" />
 
+  <div class=":uno: absolute px-16 flex flex-col h-full w-full pt-60 pb-10">
+    <label class="text-5xl">
+      Name:
+      <input
+        bind:value={name}
+        maxlength="7"
+        class=":uno: p-2 bg-cover bg-center bg-no-repeat h-12 w-64 text-5xl bg-transparent text-white outline-none bg-[url(/assets/name.png)]"
+      />
+    </label>
 
-	<div class=":uno: absolute px-16 flex flex-col h-full w-full pt-60 pb-10">
-		<label class="text-5xl">
-			Name:
-		<input bind:value={name}  maxlength="7" class=":uno: p-2 bg-cover bg-center bg-no-repeat h-12 w-64 text-5xl bg-transparent text-white outline-none bg-[url(/assets/name.png)]" >
-		</label>
+    <button
+      onclick={() => {
+        navigator.clipboard.writeText(localStorage.getItem("userInfo")!);
+        alert("Copied to clipboard make sure to save this somewhere safe");
+      }}>Copy user info</button
+    >
+    <button
+      onclick={() => {
+        let info = prompt("Paste user info here");
+        if (info) {
+          localStorage.setItem("userInfo", info);
+          userDialog.close();
+        }
+      }}>Login from user info</button
+    >
 
-		<button onclick={() => {
-			navigator.clipboard.writeText(localStorage.getItem("userInfo")!);
-			alert("Copied to clipboard make sure to save this somewhere safe")
-		}}>Copy user info</button>
-		<button onclick={() => {
-			let info = prompt("Paste user info here");
-			if (info) {
-				localStorage.setItem("userInfo", info);
-				userDialog.close();
-			}
-		}}>Login from user info</button>
-
-		<button class="mt-auto mx-auto" onclick={async() => {
-			let minLength = 3;
-			let maxLength = 7;
-			if (name.length < minLength || name.length > maxLength) {
-				alert("Name must be between 3 and 7 characters");
-				return;
-			}
-			console.log("Name is", name);
-			let keys = localStorage.getItem("userInfo");
-			if (!keys) {
-				alert("You need to sign in first, play a game or insert private and public keys");
-				return;
-			}
-			let json = JSON.parse(keys);
-			let res = await fetch(`${backendUrl}/set_name`, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					name: name,
-					pub_key: json.pub_key,
-					signature: sign_message(json.priv_key, name),
-				}),
-			});
-			if(res.ok) {
-				userDialog.close();
-			}
-		}}>
-			<img src="/assets/save.png" alt="" class="brightness-125 hover:brightness-110 w-72" >
-		</button>
-	</div>
-	<button class=":uno: absolute right-0 top-0 " onclick={() => {
-		userDialog.close();
-	}}>
-	<img src="/assets/close.png" alt="" class=":uno: size-12 hover:brightness-110 rounded-xl">
-	</button>
+    <button
+      class="mt-auto mx-auto"
+      onclick={async () => {
+        let minLength = 3;
+        let maxLength = 7;
+        if (name.length < minLength || name.length > maxLength) {
+          alert("Name must be between 3 and 7 characters");
+          return;
+        }
+        console.log("Name is", name);
+        let keys = localStorage.getItem("userInfo");
+        if (!keys) {
+          alert("You need to sign in first, play a game or insert private and public keys");
+          return;
+        }
+        let json = JSON.parse(keys);
+        let res = await fetch(`${backendUrl}/set_name`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            name: name,
+            pub_key: json.pub_key,
+            signature: sign_message(json.priv_key, name),
+          }),
+        });
+        if (res.ok) {
+          userDialog.close();
+        }
+      }}
+    >
+      <img src="/assets/save.png" alt="" class="brightness-125 hover:brightness-110 w-72" />
+    </button>
+  </div>
+  <button
+    class=":uno: absolute right-0 top-0"
+    onclick={() => {
+      userDialog.close();
+    }}
+  >
+    <img src="/assets/close.png" alt="" class=":uno: size-12 hover:brightness-110 rounded-xl" />
+  </button>
 </dialog>
 
 {#if gameInfo}
+  {#if status}
+    <div class="absolute text-center text-2xl w-full h-full top-20 z-20">
+      <span class="bg-blue text-red-900 p-3 rounded-xl">{status}</span>
+    </div>
+  {/if}
 
-
-
-{#if status}
-<div class="absolute text-center text-2xl w-full h-full top-20 z-20">
-    <span class="bg-blue text-red-900 p-3 rounded-xl">{status}</span>
-</div>
-{/if}
-
-<div class="flex gap-4 mx-auto">
+  <div class="flex gap-4 mx-auto">
     <div class="ml-auto">
-        <div class="flex flex-col justify-center">
-			<div class="">
+      <div class="flex flex-col justify-center">
+        <div class="">
+          <img src="/assets/turns-your.png" alt="" style:display={gameState?.your_turn ? "block" : "none"} />
+          <img src="/assets/turns-other.png" alt="" style:display={!gameState?.your_turn ? "block" : "none"} />
 
-        <img src="/assets/turns-your.png" alt="" style:display={gameState?.your_turn ? "block" : "none"}>
-        <img src="/assets/turns-other.png" alt="" style:display={!gameState?.your_turn ? "block" : "none"}>
+          <button
+            class="mx-auto mb-10 my-4"
+            onclick={() => {
+              const sending = game.w_forfeit();
+              peerConnection.send(sending);
 
-		<button class="mx-auto mb-10 my-4" onclick={() => {
-            const sending = game.w_forfeit();
-			peerConnection.send(sending);
-
-            gameState = game.w_get_board_data();
-        }}>
-        	<img src="/assets/turns-forfeit.png" alt="" class="hover:brightness-110" >
-        </button>
-			</div>
-			{#each [1,2,3,4,5,6] as i}
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div class="size-28 mx-auto " draggable="true"
-			style:display={(gameState?.your_turn && gameState?.next_dice==i) ? "block" : "none"}
-		ondragstart={() => {
-            console.log("Dragging")
-        }}
-    ondragend={() => {
-        console.log("Dragging ended")
-    }}
-         >
-        {@render dice(i, 0)}
-
+              gameState = game.w_get_board_data();
+            }}
+          >
+            <img src="/assets/turns-forfeit.png" alt="" class="hover:brightness-110" />
+          </button>
         </div>
-
-		{/each}
-        </div>
-
-
-
-
+        {#each [1, 2, 3, 4, 5, 6] as i}
+          <!-- svelte-ignore a11y_no_static_element_interactions -->
+          <div
+            class="size-28 mx-auto"
+            draggable="true"
+            style:display={gameState?.your_turn && gameState?.next_dice == i ? "block" : "none"}
+            ondragstart={() => {
+              console.log("Dragging");
+            }}
+            ondragend={() => {
+              console.log("Dragging ended");
+            }}
+          >
+            {@render dice(i, 0)}
+          </div>
+        {/each}
+      </div>
     </div>
     <div class=" flex gap-8 flex-col mr-auto">
-        <div class="grid grid-cols-3 gap-3 relative">
-            {@render diceLayout(gameState?.decks.me, gameState?.points?.me, highLightsMine, (index:number) => {
-            if(!gameState?.your_turn) {alert("Not your turn");return}
-            if(gameState?.is_completed) {alert("Game is over!");return}
-            let pos = index % boardSize.width;
-            let error = game.w_test_place(pos);
-            if(error) {
-                alert(error);
-                return;
-            }
-            const sending = game.w_place(index % boardSize.width);
-            console.log("Sending Bytes", sending)
-            peerConnection.send(sending);
-            gameState = game.w_get_board_data();
-            })}
-
-        </div>
-        <span class="text-2xl">Opponents layout: </span>
-        <div class=":uno: grid grid-cols-3 gap-3 mx-auto relative">
-            {@render diceLayout(gameState?.decks.other, gameState?.points?.other, highLightsOther, (index:number) => {
-            console.log("Tried clicking on other dice ", index)
-            })}
-        </div>
+      <div class="grid grid-cols-3 gap-3 relative">
+        {@render diceLayout(gameState?.decks.me, gameState?.points?.me, highLightsMine, (index: number) => {
+          if (!gameState?.your_turn) {
+            alert("Not your turn");
+            return;
+          }
+          if (gameState?.is_completed) {
+            alert("Game is over!");
+            return;
+          }
+          let pos = index % boardSize.width;
+          let error = game.w_test_place(pos);
+          if (error) {
+            alert(error);
+            return;
+          }
+          const sending = game.w_place(index % boardSize.width);
+          console.log("Sending Bytes", sending);
+          peerConnection.send(sending);
+          gameState = game.w_get_board_data();
+        })}
+      </div>
+      <span class="text-2xl">Opponents layout: </span>
+      <div class=":uno: grid grid-cols-3 gap-3 mx-auto relative">
+        {@render diceLayout(gameState?.decks.other, gameState?.points?.other, highLightsOther, (index: number) => {
+          console.log("Tried clicking on other dice ", index);
+        })}
+      </div>
     </div>
-</div>
-
+  </div>
 {:else}
-
-<div class=":uno: w-full h-full flex justify-center items-center relative rounded-xl text-white">
+  <div class=":uno: w-full h-full flex justify-center items-center relative rounded-xl text-white">
     <div class=":uno: h-[40rem] w-[20rem] relative">
-        <img src="/assets/start-bg.png" alt="" class="absolute left-0 top-0 h-full w-full rounded-xl">
-        <div class=":uno: absolute left-0 top-0 h-full w-full flex flex-col justify-center items-center p-4">
-            <span class=":uno: text-4xl text-center font-semibold">KnuckleBones</span>
-            <a class=":uno: text-center" href="https://tricked.dev">By Tricked</a>
-            <span>Rules: <a class=":uno: underline hover:text-red-700 duration-150" href="https://cult-of-the-lamb.fandom.com/wiki/Knucklebones">As seen in the Cult Of Lamb Wiki</a></span>
-            <details class=":uno: w-full text-lg">
-                <summary class="w-full">TL;DR</summary>
-                <ul class="font-serif">
-                    <li>You get a dice and the more of the same dice you have in a row the more points you get</li>
-                    <li>All dices of the same number get removed from the other row if you place a dice</li>
-                </ul>
-            </details>
-			<details class=":uno: w-full text-lg">
-				<summary class="w-full">Leaderboard</summary>
-				<ul class=":uno: font-serif max-h-80 overflow-y-scroll">
-					{#each (leaderboardData?.entries ?? []) as entry}
-						<li>{entry.name}: {entry.total_points} points, {entry.total_games} games, {entry.total_wins} wins</li>
-					{/each}
-				</ul>
-			</details>
+      <img src="/assets/start-bg.png" alt="" class="absolute left-0 top-0 h-full w-full rounded-xl" />
+      <div class=":uno: absolute left-0 top-0 h-full w-full flex flex-col justify-center items-center p-4">
+        <span class=":uno: text-4xl text-center font-semibold">KnuckleBones</span>
+        <a class=":uno: text-center" href="https://tricked.dev">By Tricked</a>
+        <span
+          >Rules: <a
+            class=":uno: underline hover:text-red-700 duration-150"
+            href="https://cult-of-the-lamb.fandom.com/wiki/Knucklebones">As seen in the Cult Of Lamb Wiki</a
+          ></span
+        >
+        <details class=":uno: w-full text-lg">
+          <summary class="w-full">TL;DR</summary>
+          <ul class="font-serif">
+            <li>You get a dice and the more of the same dice you have in a row the more points you get</li>
+            <li>All dices of the same number get removed from the other row if you place a dice</li>
+          </ul>
+        </details>
+        <details class=":uno: w-full text-lg">
+          <summary class="w-full">Leaderboard</summary>
+          <ul class=":uno: font-serif max-h-80 overflow-y-scroll">
+            {#each leaderboardData?.entries ?? [] as entry}
+              <li>
+                {entry.name}: {entry.total_points} points, {entry.total_games} games,
+                {entry.total_wins} wins
+              </li>
+            {/each}
+          </ul>
+        </details>
 
-			{@render nojs()}
+        {@render nojs()}
 
-			{#if !wasm}
-				{@render nowasm()}
-			{/if}
+        {#if !wasm}
+          {@render nowasm()}
+        {/if}
 
-
-            <button onclick={startChat} class=":uno: mt-auto hover:brightness-110">
-                <img src="/assets/start-btn.png" class="h-24" alt="">
-            </button>
-        </div>
+        <button onclick={startChat} class=":uno: mt-auto hover:brightness-110">
+          <img src="/assets/start-btn.png" class="h-24" alt="" />
+        </button>
+      </div>
     </div>
-</div>
-<button class=":uno: absolute top-2 right-2 hover:brightness-110" onclick={() => {
-    userDialog.showModal();
-}}>
-<img class="h-16" src="/assets/user.png">
-</button>
+  </div>
+  <button
+    class=":uno: absolute top-2 right-2 hover:brightness-110"
+    onclick={() => {
+      userDialog.showModal();
+    }}
+  >
+    <img class="h-16" src="/assets/user.png" />
+  </button>
 {/if}
 
 {#snippet nowasm()}
-	<span >Your browser does not support WebAssembly, please use a modern browser</span>
-	<a href="https://webassembly.org/" class="text-blue-700 underline hvoer:text-blue-900">What is wasm?</a>
+  <span>Your browser does not support WebAssembly, please use a modern browser</span>
+  <a href="https://webassembly.org/" class="text-blue-700 underline hvoer:text-blue-900">What is wasm?</a>
 {/snippet}
 
 {#snippet nojs()}
-		<noscript class="w-full">
-				<span class="text-4xl text-teal-300">
-					You need to enable JavaScript to run this app. otherwise enjoy the artwork
-				</span>
-				<div class="flex justify-center gap-4">
-					<div class="size-12">
-						{@render dice(1, 0)}
-					</div>
-					<div class="size-12">
-						{@render dice(2, 2)}
-					</div>
-					<div class="size-12">
-						{@render dice(3, 3)}
-					</div>
-				</div>
-				<span class="flex justify-center text-8xl text-center w-full gap-2">
-					<img src="/assets/end-texts-your.png">
-					<span class="text-8xl text-center w-full">0</span>
-				</span>
-			</noscript>
-
+  <noscript class="w-full">
+    <span class="text-4xl text-teal-300">
+      You need to enable JavaScript to run this app. otherwise enjoy the artwork
+    </span>
+    <div class="flex justify-center gap-4">
+      <div class="size-12">
+        {@render dice(1, 0)}
+      </div>
+      <div class="size-12">
+        {@render dice(2, 2)}
+      </div>
+      <div class="size-12">
+        {@render dice(3, 3)}
+      </div>
+    </div>
+    <span class="flex justify-center text-8xl text-center w-full gap-2">
+      <img src="/assets/end-texts-your.png" />
+      <span class="text-8xl text-center w-full">0</span>
+    </span>
+  </noscript>
 {/snippet}
