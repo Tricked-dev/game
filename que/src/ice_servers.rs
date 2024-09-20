@@ -92,8 +92,6 @@ impl CloudflareIceServerProvider {
             .send()
             .await;
 
-        dbg!(&response);
-
         let response = response.map_err(|e| UserCreateError::Internal(e.to_string()))?;
 
         let response = response.json::<IceServersResponse>().await?;

@@ -1,5 +1,7 @@
 # Game
 
+![Knucklebones Game Screenshot](./public/og/og.png)
+
 ## TODO:
 
 - Ui improvements

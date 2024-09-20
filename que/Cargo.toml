@@ -20,13 +20,9 @@ tokio = { version = "1.40.0", features = ["full"] }
 uuid = { version = "1.10.0", features = ["serde", "v4", "v7"] }
 lib_knuckle = { path = "../lib_knuckle", default-features = false, version = "0.1.0" }
 
-tracing-subscriber = { version = "0.3.18", features = [
-    "parking_lot",
-    "once_cell",
-    "tracing",
-    "env-filter",
-] }
-tracing = "0.1.40"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
 tower-http = { version = "0.5.2", features = ["cors"] }
 
 tokio-postgres = { version = "0.7.11", features = ["with-uuid-1"] }

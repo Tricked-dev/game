@@ -32,7 +32,7 @@ use thiserror::Error;
 use tokio::{fs, signal, sync::Mutex};
 use tokio_postgres::NoTls;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
-use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
 use uuid::{ContextV7, Timestamp, Uuid};
 
 mod database;
@@ -140,15 +140,17 @@ struct Args {
 async fn main() {
     dotenv_rs::dotenv().ok();
 
-    let args = Args::parse();
-
     tracing_subscriber::registry()
         .with(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| format!("{}=debug", env!("CARGO_CRATE_NAME")).into()),
+            tracing_subscriber::EnvFilter::try_from_default_env().unwrap_or_else(|_| {
+                format!("error,{}=debug", env!("CARGO_CRATE_NAME")).into()
+            }),
         )
-        .with(tracing_subscriber::fmt::layer());
+        .with(tracing_subscriber::fmt::layer())
+        .init();
     tracing::debug!("connecting to redis");
+
+    let args = Args::parse();
 
     let ice_server_provider: IceServerProvider =
         if let (Some(turn_token_id), Some(api_token)) =

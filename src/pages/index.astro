@@ -4,13 +4,37 @@ import "@fontsource/pixelify-sans";
 ---
 
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-		<meta name="viewport" content="width=device-width" />
-		<meta name="generator" content={Astro.generator} />
-		<title>Astro</title>
-	</head>
+<head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width" />
+    <meta name="generator" content={Astro.generator} />
+    <title>Knucklebones - 1v1 Dice Game</title>
+    <meta name="description" content="Knucklebones is an exciting 1v1 dice game where players compete to place 9 dice in a row, strategically blocking and scoring to win." />
+    <meta name="theme-color" content="#834d35" />
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Knucklebones - 1v1 Dice Game" />
+    <meta property="og:description" content="Knucklebones is an exciting 1v1 dice game where players compete to place 9 dice in a row, strategically blocking and scoring to win." />
+    <meta property="og:image" content="/og/og.png" />
+    <meta property="og:url" content="https://knucklebones.fyi/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Knucklebones" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="675" />
+    <meta property="og:color" content="#834d35" />
+
+    <!-- Twitter Card Meta Tags -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Knucklebones - 1v1 Dice Game" />
+    <meta name="twitter:description" content="Knucklebones is an exciting 1v1 dice game where players compete to place 9 dice in a row, strategically blocking and scoring to win." />
+    <meta name="twitter:image" content="/og/og.png" />
+    <meta name="twitter:image:alt" content="Knucklebones game screenshot" />
+    
+    <!-- Discord Metadata (via Open Graph) -->
+    <meta property="og:locale" content="en_US" />
+
+  </head>
 	<body class="w-full h-full p-4">
 		<Game client:load />
 		<style is:global>

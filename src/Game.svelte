@@ -26,6 +26,7 @@ let status: string | undefined = $state();
 let pub_key: string;
 let priv_key: string;
 let ice_servers: RTCIceServer;
+let wasm = $state(true)
 
 function startChat() {
 	waitingDialog.showModal();
@@ -235,6 +236,21 @@ $effect(() => {
 let leaderboardData:LeaderBoard = $state(null!);
 
 onMount(async () => {
+
+	const supported = (() => {
+    try {
+        if (typeof WebAssembly === "object"
+            && typeof WebAssembly.instantiate === "function") {
+            const module = new WebAssembly.Module(Uint8Array.of(0x0, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00));
+            if (module instanceof WebAssembly.Module)
+                return new WebAssembly.Instance(module) instanceof WebAssembly.Instance;
+        }
+    } catch (e) {
+    }
+    return false;
+})();
+wasm=supported;
+
 	leaderboardData = await fetch(`${backendUrl}/leaderboard`).then(r => r.json());
 	localStorage.setItem("version", "0")
 });
@@ -308,7 +324,6 @@ let name = $state("");
         style:background-size="cover"
         >
         {@render dice(row, occurrences)}
-        <!-- <svelte:component this={icons[row]} /> -->
     </button>
   {/each}
   {#each points ?? [] as row}
@@ -328,6 +343,7 @@ let name = $state("");
 
   {/each}
 {/snippet}
+
 
 
 
@@ -543,11 +559,17 @@ let name = $state("");
 				</ul>
 			</details>
 
+			{@render nojs()}
+
+			{#if !wasm}
+				{@render nowasm()}
+			{/if}
+
+
             <button onclick={startChat} class=":uno: mt-auto hover:brightness-110">
                 <img src="/assets/start-btn.png" class="h-24" alt="">
             </button>
         </div>
-
     </div>
 </div>
 <button class=":uno: absolute top-2 right-2 hover:brightness-110" onclick={() => {
@@ -556,3 +578,32 @@ let name = $state("");
 <img class="h-16" src="/assets/user.png">
 </button>
 {/if}
+
+{#snippet nowasm()}
+	<span >Your browser does not support WebAssembly, please use a modern browser</span>
+	<a href="https://webassembly.org/" class="text-blue-700 underline hvoer:text-blue-900">What is wasm?</a>
+{/snippet}
+
+{#snippet nojs()}
+		<noscript class="w-full">
+				<span class="text-4xl text-teal-300">
+					You need to enable JavaScript to run this app. otherwise enjoy the artwork
+				</span>
+				<div class="flex justify-center gap-4">
+					<div class="size-12">
+						{@render dice(1, 0)}
+					</div>
+					<div class="size-12">
+						{@render dice(2, 2)}
+					</div>
+					<div class="size-12">
+						{@render dice(3, 3)}
+					</div>
+				</div>
+				<span class="flex justify-center text-8xl text-center w-full gap-2">
+					<img src="/assets/end-texts-your.png">
+					<span class="text-8xl text-center w-full">0</span>
+				</span>
+			</noscript>
+
+{/snippet}

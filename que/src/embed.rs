@@ -11,7 +11,6 @@ pub async fn static_handler(uri: Uri) -> impl IntoResponse {
     if path.is_empty() {
         path = "index.html".to_string();
     }
-    println!("{path}");
     StaticFile(path)
 }
 
