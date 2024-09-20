@@ -14,6 +14,7 @@ import wasm from "vite-plugin-wasm";
 
 // https://astro.build/config
 export default defineConfig({
+  site: "https://knucklebones.fyi",
   integrations: [
     svelte(),
     UnoCSS({
