@@ -27,5 +27,14 @@
   },
   "overrides": {
     "@sveltejs/vite-plugin-svelte": "^4.0.0-next.6"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.3",
+    "prettier-plugin-svelte": "^3.2.6"
+  },
+  "prettier": {
+    "plugins": ["prettier-plugin-svelte"],
+    "pluginSearchDirs": ["."],
+    "overrides": [{ "files": "*.svelte", "options": { "parser": "svelte" } }]
   }
 }

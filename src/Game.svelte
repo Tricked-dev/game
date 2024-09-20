@@ -464,8 +464,10 @@ let name = $state("");
 
 
 {#if status}
-    <span>{status}</span>
-{:else}
+<div class="absolute text-center text-2xl w-full h-full top-20 z-20">
+    <span class="bg-blue text-red-900 p-3 rounded-xl">{status}</span>
+</div>
+{/if}
 
 <div class="flex gap-4 mx-auto">
     <div class="ml-auto">
@@ -532,7 +534,6 @@ let name = $state("");
         </div>
     </div>
 </div>
-{/if}
 
 {:else}
 
