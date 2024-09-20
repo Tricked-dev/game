@@ -92,8 +92,22 @@
 
           // ws.close()
           break;
-        case "disconnect":
+        case "disconnected":
           //TODO: handle error message
+          if (message.name == "UserDoesNotExist") {
+            if (localStorage.getItem("userinfo.backup")) {
+              localStorage.setItem("userInfo1", localStorage.getItem("userInfo")!);
+            } else {
+              localStorage.setItem("userinfo.backup", localStorage.getItem("userInfo")!);
+            }
+            localStorage.removeItem("userInfo");
+            resetChat();
+            setTimeout(() => {
+              startChat();
+            }, 200);
+            return;
+          }
+          status = message.reason;
           waitingDialog.close();
           kickedDialog.showModal();
           break;
@@ -183,13 +197,13 @@
   }
 
   function resetChat() {
-    if (gameState.decks) {
-      gameState.decks.me = undefined!;
-      gameState.decks.other = undefined!;
-    }
     if (gameState) {
       gameState.decks = undefined!;
       gameState.points = undefined!;
+      if (gameState?.decks) {
+        gameState.decks.me = undefined!;
+        gameState.decks.other = undefined!;
+      }
     }
     try {
       game.free();
@@ -395,7 +409,7 @@
 </dialog>
 
 <dialog bind:this={kickedDialog} class=":uno: bg-transparent text-white outline-none">
-  You were kicked from the game. This is probably because you joined the queue on another device/tab
+  You were kicked from the game. Reason: {status}
 </dialog>
 
 <dialog bind:this={userDialog} class=":uno: bg-transparent text-white outline-none w-[40rem] h-[70rem]">

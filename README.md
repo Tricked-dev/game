@@ -8,6 +8,7 @@
 - Backend service to store results in
 - proper logging
 - look into deadlock
+- Handle unexpected ws connection disconnect
 
 ## Turn servers
 

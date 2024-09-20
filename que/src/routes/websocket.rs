@@ -13,7 +13,7 @@ use futures::{SinkExt, StreamExt};
 use lib_knuckle::{signature_from_string, verifying_key_from_string};
 use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
-use uuid::Uuid;
+use uuid::{NoContext, Timestamp, Uuid};
 
 use crate::{
     ice_servers::{IceServerData, IceServers},
@@ -53,7 +53,7 @@ enum SendMessages {
     #[serde(rename = "partner-left")]
     PartnerLeft,
     #[serde(rename = "disconnected")]
-    Disconnected { reason: String },
+    Disconnected { reason: String, name: String },
 }
 
 impl SendMessages {
@@ -98,7 +98,8 @@ async fn resolve_user_name(conn: &Conn, pub_key: &str) -> Result<Uuid, UserCreat
             "SELECT player_id FROM players WHERE public_key = $1",
             &[&STANDARD_NO_PAD.decode(pub_key).unwrap()],
         )
-        .await?;
+        .await
+        .map_err(|e| UserCreateError::UserDoesNotExist)?;
     let id: Uuid = data.get(0);
     Ok(id)
 }
@@ -223,6 +224,13 @@ pub async fn handle_socket(
                                     )
                                     .to_bytes(),
                             );
+
+                            conn.execute(
+                                /* language=postgresql */
+                                "INSERT INTO started_matches (match_id, time, seed, player1, player2) VALUES ($1, $2, $3, $4, $5)",
+                            &[&Uuid::new_v7(Timestamp::now(NoContext)), &(time as i64),  &(seed as i64), &user_id, &partner_user_id])
+                            .await?;
+
                             tracing::debug!("Sending Paired");
 
                             let ice_servers =
@@ -302,17 +310,17 @@ pub async fn handle_socket(
     };
 
     let out: Result<(), UserCreateError> = data_handler.await;
-
     if let Err(e) = out {
         tracing::debug!("User disconnected: {e:?}");
         tx.send(
             SendMessages::Disconnected {
+                name: e.get_name().to_owned(),
                 reason: e.to_string(),
             }
             .to_text_message()?,
         )?;
     }
-    println!("User {:?} disconnected", user_id);
+    tracing::info!("User {:?} disconnected", user_id);
     let partner_id = state.all_users.get(&user_id).unwrap().partner_id;
     if let Some(partner_user_id) = partner_id {
         if let Some(partner_user) = state.all_users.get(&partner_user_id) {

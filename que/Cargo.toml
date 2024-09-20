@@ -41,3 +41,5 @@ reqwest = { version = "0.12.7", default-features = false, features = [
 ] }
 clap = { version = "4.5.17", features = ["derive", "env", "cargo"] }
 dotenv_rs = { version = "0.16.1" }
+strum_macros = "0.26.4"
+strum = "0.26.3"
