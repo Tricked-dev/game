@@ -1,10 +1,9 @@
 use axum::{
     extract::ws::Message,
     routing::{get, post},
-    Extension, Json, Router,
+    Extension, Router,
 };
 use axum_thiserror::ErrorStatus;
-use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
 use clap::Parser;
@@ -19,24 +18,16 @@ use http::{
 use ice_servers::{
     CloudflareIceServerProvider, GoogleIceServerProvider, IceServerProvider,
 };
-use lib_knuckle::{
-    api_interfaces::{GameBody, LeaderBoard, LeaderBoardEntry, UserUpdate},
-    game::{Game, GameEnd, ServerGameInfo},
-    keys::Keys,
-    signature_from_string, verifying_key_from_string,
-};
-use pool_extractor::DatabaseConnection;
 use rand_core::OsRng;
 use routes::{leader_board, set_name, signup, submit_game, ws_handler};
 use std::sync::Arc;
 use strum::EnumMessage;
-use strum_macros::{EnumDiscriminants, EnumMessage, EnumString, VariantNames};
 use thiserror::Error;
 use tokio::{fs, signal, sync::Mutex};
 use tokio_postgres::NoTls;
 use tower_http::cors::{AllowOrigin, Any, CorsLayer};
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
-use uuid::{ContextV7, Timestamp, Uuid};
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use uuid::{ContextV7, Uuid};
 
 pub mod database;
 pub mod embed;
@@ -160,7 +151,7 @@ async fn main() {
         )
         .with(tracing_subscriber::fmt::layer())
         .init();
-    tracing::debug!("connecting to redis");
+    tracing::debug!("connecting to Postgresql");
 
     let args = Args::parse();
 
@@ -229,7 +220,7 @@ async fn main() {
                 .allow_methods(Any),
         );
 
-    println!("Starting at localhost:8083");
+    tracing::info!("Starting at localhost:8083");
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8083").await.unwrap();
     let terminate_signal = signal::ctrl_c();
 

@@ -1,14 +1,16 @@
 cfg_if::cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         use wasm_bindgen::prelude::wasm_bindgen;
-        #[wasm_bindgen]
-        extern "C" {
-            #[wasm_bindgen(js_namespace = Date, js_name = now)]
-            pub fn now_wasm() -> u32;
+        mod wasm {
+            use wasm_bindgen::prelude::wasm_bindgen;
+            #[wasm_bindgen]
+            extern "C" {
+                #[wasm_bindgen(js_namespace = Date)]
+                pub fn now() -> f64;
+            }
         }
-
         pub fn now() -> u64 {
-            now_wasm() as u64
+            wasm::now() as u64
         }
     } else {
         use std::time::{SystemTime, UNIX_EPOCH};

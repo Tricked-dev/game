@@ -7,6 +7,7 @@ use crate::{
     game::{Game, HistoryItem, ServerGameInfo},
     keys::Keys,
     signing_key_from_string,
+    utils::now_impl::now,
 };
 
 #[wasm_bindgen]
@@ -85,6 +86,10 @@ impl Game {
             (deck_x, deck_y),
             ServerGameInfo { seed, starting },
         )
+    }
+
+    pub fn now(&self) -> u64 {
+        now()
     }
 
     pub fn w_add_opponent_move(&mut self, data: Vec<u8>) -> Option<String> {

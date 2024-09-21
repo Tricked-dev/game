@@ -926,6 +926,7 @@ dependencies = [
  "serde",
  "serde-wasm-bindgen",
  "tsify",
+ "uuid",
  "wasm-bindgen",
 ]
 

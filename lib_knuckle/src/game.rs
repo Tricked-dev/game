@@ -1,5 +1,6 @@
 use ed25519_dalek::{Signature, Signer, Verifier};
 use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 #[cfg(any(test, target_arch = "wasm32", feature = "wasm"))]
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -25,10 +26,11 @@ pub struct Game {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct HistoryForSql {
-    seq: u32,
-    now: u64,
-    x: u16,
-    number: u8,
+    pub seq: u32,
+    pub player: Uuid,
+    pub now: u64,
+    pub x: u16,
+    pub number: u8,
 }
 
 impl Game {
@@ -49,8 +51,10 @@ impl Game {
             verify: true,
         }
     }
+
     pub fn validate_entire_game(
         keys: Keys,
+        uuids: (Uuid, Uuid),
         deck_size: (usize, usize),
         info: ServerGameInfo,
         history: Vec<HistoryItem>,
@@ -79,9 +83,19 @@ impl Game {
                 now: item.now,
                 x: item.x,
                 number: game.dice.peek() as u8,
+                player: if !game.my_turn() { uuids.0 } else { uuids.1 },
             });
 
             game.add_opponent_move(item)?;
+        }
+        let data = game.get_board_data();
+        if data.winner.win_by_forfeit {
+            let last_item = sql_history.last_mut().unwrap();
+            if data.winner.winner {
+                last_item.player = uuids.1;
+            } else {
+                last_item.player = uuids.0;
+            }
         }
         Ok((game.get_board_data(), sql_history))
     }
@@ -279,7 +293,6 @@ impl Game {
                     );
 
                     let is_from_me = self.keys.my_verify().verify(&to_verify, &signature);
-                    dbg!(&is_from_me);
                     GameEnd {
                         win_by_tie: false,
                         win_by_forfeit: true,

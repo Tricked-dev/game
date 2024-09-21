@@ -1,11 +1,11 @@
-macro_rules! routes {
-    ($($name:ident),*) => {
-        $(
-            mod $name;
-            pub use $name::*;
-        )*
-    };
-}
+// macro_rules! routes {
+//     ($($name:ident),*) => {
+//         $(
+//             mod $name;
+//             pub use $name::*;
+//         )*
+//     };
+// }
 
 //routes![leader_board, set_name, signup, submit_game, websocket];
 

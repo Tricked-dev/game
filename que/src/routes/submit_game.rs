@@ -1,42 +1,23 @@
-use axum::{
-    extract::ws::Message,
-    routing::{get, post},
-    Extension, Json, Router,
-};
-use axum_thiserror::ErrorStatus;
+use axum::{Extension, Json};
 use base64::{engine::general_purpose::STANDARD_NO_PAD, Engine};
-use bb8::Pool;
-use bb8_postgres::PostgresConnectionManager;
-use clap::Parser;
-use dashmap::DashMap;
-use ed25519_dalek::SigningKey;
-use http::{
-    header::{ACCEPT, AUTHORIZATION, CONTENT_TYPE},
-    HeaderValue, StatusCode,
-};
 use lib_knuckle::{
-    api_interfaces::{GameBody, LeaderBoard, LeaderBoardEntry, UserUpdate},
+    api_interfaces::GameBody,
     game::{Game, GameEnd, ServerGameInfo},
     keys::Keys,
     signature_from_string, verifying_key_from_string,
 };
-use rand_core::OsRng;
-use std::sync::Arc;
-use std::time::SystemTime;
-use thiserror::Error;
-use tokio::{fs, signal, sync::Mutex};
-use tokio_postgres::NoTls;
-use tower_http::cors::{AllowOrigin, Any, CorsLayer};
-use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt};
-use uuid::{ContextV7, Timestamp, Uuid};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio_postgres::types::ToSql;
+use uuid::Uuid;
 
-use crate::{
-    pool_extractor::DatabaseConnection, AppState, SharedContextV7, UserCreateError,
-};
+use crate::{pool_extractor::DatabaseConnection, AppState, UserCreateError};
+
+fn unix_timestamp_to_system_time(timestamp: u64) -> SystemTime {
+    UNIX_EPOCH + Duration::from_millis(timestamp)
+}
 
 pub async fn submit_game(
     DatabaseConnection(conn): DatabaseConnection,
-    Extension(clock): Extension<SharedContextV7>,
     Extension(state): Extension<AppState>,
     Json(body): Json<GameBody>,
 ) -> Result<String, UserCreateError> {
@@ -73,22 +54,6 @@ pub async fn submit_game(
         }
     };
 
-    let game = Game::validate_entire_game(
-        Keys::VerifyOnly {
-            my_keys: verify_your,
-            other_keys: verify_other,
-        },
-        (3, 3),
-        ServerGameInfo::new(body.seed, body.starting),
-        body.moves,
-    );
-
-    if let Err(e) = game {
-        return Err(UserCreateError::BadRequest(e.to_string()));
-    };
-
-    let (board_data, sql_history) = game.map_err(UserCreateError::BadRequest)?;
-
     let user_id: Uuid = conn
         .query_one(
             /* language=postgresql */
@@ -105,6 +70,25 @@ pub async fn submit_game(
         )
         .await?
         .get(0);
+
+    tracing::debug!("User {:?} Partner {:?}", user_id, partner_id);
+
+    let game = Game::validate_entire_game(
+        Keys::VerifyOnly {
+            my_keys: verify_your,
+            other_keys: verify_other,
+        },
+        (user_id, partner_id),
+        (3, 3),
+        ServerGameInfo::new(body.seed, body.starting),
+        body.moves,
+    );
+
+    if let Err(e) = game {
+        return Err(UserCreateError::BadRequest(e.to_string()));
+    };
+
+    let (board_data, sql_history) = game.map_err(UserCreateError::BadRequest)?;
 
     let (winner, result) = match board_data.winner {
         GameEnd {
@@ -139,7 +123,7 @@ pub async fn submit_game(
             &[&(body.seed as i64), &(body.time as i64)],
         )
         .await
-        .map_err(|e| UserCreateError::BadRequest("Cant find match".to_owned()))?;
+        .map_err(|_e| UserCreateError::BadRequest("Cant find match".to_owned()))?;
 
     let match_id: Uuid = existing_match.get(0);
     let created_at: SystemTime = existing_match.get(1);
@@ -172,6 +156,34 @@ pub async fn submit_game(
         ],
     )
     .await?;
+
+    let mut query = String::from(
+        "INSERT INTO moves (match_id, player_id, number, x, seq, created_at) VALUES ",
+    );
+    let mut params: Vec<&(dyn ToSql + Sync)> = Vec::new();
+
+    for (i, item) in sql_history.iter().enumerate() {
+        if i != 0 {
+            query.push_str(", ");
+        }
+        query.push_str(&format!(
+            "(${}, ${}, ${}, ${}, ${}, ${})",
+            i * 6 + 1,
+            i * 6 + 2,
+            i * 6 + 3,
+            i * 6 + 4,
+            i * 6 + 5,
+            i * 6 + 6,
+        ));
+        params.push(&match_id);
+        params.push(&item.player);
+        params.push(Box::leak(Box::new(item.number as i16)));
+        params.push(Box::leak(Box::new(item.x as i16)));
+        params.push(Box::leak(Box::new(item.seq as i32)));
+        params.push(Box::leak(Box::new(unix_timestamp_to_system_time(item.now))));
+    }
+
+    conn.execute(&query, params.as_slice()).await?;
 
     println!("signature is valid");
 

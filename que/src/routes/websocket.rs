@@ -99,7 +99,7 @@ async fn resolve_user_name(conn: &Conn, pub_key: &str) -> Result<Uuid, UserCreat
             &[&STANDARD_NO_PAD.decode(pub_key).unwrap()],
         )
         .await
-        .map_err(|e| UserCreateError::UserDoesNotExist)?;
+        .map_err(|_e| UserCreateError::UserDoesNotExist)?;
     let id: Uuid = data.get(0);
     Ok(id)
 }
@@ -228,7 +228,7 @@ pub async fn handle_socket(
                             conn.execute(
                                 /* language=postgresql */
                                 "INSERT INTO started_matches (match_id, time, seed, player1, player2) VALUES ($1, $2, $3, $4, $5)",
-                            &[&Uuid::new_v7(Timestamp::now(NoContext)), &(time as i64),  &(seed as i64), &user_id, &partner_user_id])
+                            &[&Uuid::new_v7(Timestamp::now(NoContext)), &(time as i64),  &(seed as i64), &user.player_id.unwrap(), &partner_user.player_id.unwrap()])
                             .await?;
 
                             tracing::debug!("Sending Paired");
@@ -257,7 +257,7 @@ pub async fn handle_socket(
                                     initiator: true,
                                     seed,
                                     signature: game_signature,
-                                    ice_servers: ice_servers,
+                                    ice_servers,
                                     time,
                                 }
                                 .to_text_message()?,

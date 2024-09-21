@@ -26,7 +26,11 @@ pub async fn init_db(conn: Conn) -> Result<(), UserCreateError> {
             time BIGINT NOT NULL,
             player1 UUID NOT NULL,
             player2 UUID NOT NULL,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+            FOREIGN KEY (player1) REFERENCES players(player_id),
+            FOREIGN KEY (player2) REFERENCES players(player_id),
+            UNIQUE (seed, time)
         );
     ",
     )
@@ -47,12 +51,45 @@ pub async fn init_db(conn: Conn) -> Result<(), UserCreateError> {
             points_p2 SMALLINT NOT NULL,
             started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
             completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
             FOREIGN KEY (player1) REFERENCES players(player_id),
             FOREIGN KEY (player2) REFERENCES players(player_id),
             FOREIGN KEY (winner) REFERENCES players(player_id),
             UNIQUE (seed, time)
         );
     ",
+    )
+    .await
+    .ok();
+
+    conn.simple_query(
+        /* language=postgresql */
+        "
+  CREATE TABLE moves (
+            match_id UUID NOT NULL,
+            player_id UUID NOT NULL,
+            number SMALLINT NOT NULL,
+            x SMALLINT NOT NULL,
+            seq INT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+            UNIQUE (match_id, seq),
+            FOREIGN KEY (match_id) REFERENCES matches(match_id),
+            FOREIGN KEY (player_id) REFERENCES players(player_id)
+        );
+    ",
+    )
+    .await
+    .ok();
+
+    conn.simple_query("SELECT create_hypertable('moves', by_range('created_at'), if_not_exists => TRUE, migrate_data => TRUE)")
+        .await
+        .ok();
+    conn.simple_query("SELECT create_hypertable('matches', by_range('completed_at'), if_not_exists => TRUE, migrate_data => TRUE)")
+        .await
+        .ok();
+    conn.simple_query(
+        "SELECT create_hypertable('started_matches', by_range('created_at'), if_not_exists => TRUE, migrate_data => TRUE)",
     )
     .await
     .ok();
