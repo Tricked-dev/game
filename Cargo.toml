@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["lib_knuckle", "que"]
+members = ["lib_knuckle", "que", "axum_thiserror"]
 
 [profile.release-wasm]
 inherits = "release"

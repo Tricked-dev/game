@@ -225,6 +225,25 @@ async fn main() {
     let listener = tokio::net::TcpListener::bind("0.0.0.0:8083").await.unwrap();
     let terminate_signal = signal::ctrl_c();
 
+    use parking_lot::deadlock;
+    use std::{thread, time::Duration};
+    thread::spawn(move || loop {
+        thread::sleep(Duration::from_secs(10));
+        let deadlocks = deadlock::check_deadlock();
+        if deadlocks.is_empty() {
+            continue;
+        }
+
+        println!("{} deadlocks detected", deadlocks.len());
+        for (i, threads) in deadlocks.iter().enumerate() {
+            println!("Deadlock #{}", i);
+            for t in threads {
+                println!("Thread Id {:#?}", t.thread_id());
+                println!("{:#?}", t.backtrace());
+            }
+        }
+    });
+
     // Use select to run the server and listen for termination signal
     tokio::select! {
         _ = axum::serve(listener, app) => {

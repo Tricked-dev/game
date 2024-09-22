@@ -30,9 +30,11 @@
   let priv_key: string;
   let ice_servers: RTCIceServer;
   let wasm = $state(true);
+  let autoplay = $state(false);
 
   onMount(async () => {
     if (localStorage.getItem("autoplay")) {
+      autoplay = true;
       startChat();
     }
   });
@@ -144,6 +146,20 @@
     peerConnection.on("signal", (data) => {
       ws.send(JSON.stringify(data));
     });
+    function playRandomMove() {
+      let xs: Set<number> = new Set();
+      for (const [index, element] of gameState.decks.me.entries()) {
+        if (element == 0) {
+          xs.add(index % boardSize.width);
+          break;
+        }
+      }
+      // pick a random item from xs and set it as x;
+      let x = [...xs][Math.floor(Math.random() * xs.size)];
+      console.log("Placing", x);
+      const sending = game.w_place(x);
+      peerConnection.send(sending);
+    }
 
     let onMessage = async (event: MessageEvent) => {
       if (event.data instanceof ArrayBuffer) {
@@ -159,6 +175,27 @@
         console.log(game.w_add_opponent_move(data));
         gameState = game.w_get_board_data();
       }
+
+      if (autoplay) {
+        if (gameState.is_completed) {
+          resetChat();
+          disconnectedDialog.close();
+          startChat();
+          return;
+        } else {
+          if (!gameState.your_turn) {
+            return;
+          }
+
+          playRandomMove();
+          gameState = game.w_get_board_data();
+          if (gameState?.is_completed) {
+            resetChat();
+            disconnectedDialog.close();
+            startChat();
+          }
+        }
+      }
     };
 
     let onChannelClose = async () => {
@@ -173,10 +210,16 @@
 
     peerConnection.on("connect", () => {
       console.log("Connected to peer");
-      ws.close();
+      setTimeout(() => {
+        ws.close();
+      }, 15000);
       status = undefined;
       peerConnection._channel.onmessage = onMessage;
       peerConnection._channel.onclose = onChannelClose;
+
+      if (gameState.your_turn) {
+        playRandomMove();
+      }
     });
     peerConnection.on("close", () => {
       console.log("Closed");

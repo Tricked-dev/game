@@ -183,12 +183,16 @@ pub async fn handle_socket(
                             None => Uuid::nil(),
                         };
 
-                        let mut waiting_users =
-                            state.queues.get_mut(&queue_name).ok_or_internal(
+                        let waiting_users = || {
+                            tracing::debug!("Locking queues");
+                            let res = state.queues.get_mut(&queue_name).ok_or_internal(
                                 "User not in all_users something broke lol",
-                            )?;
+                            );
+                            tracing::debug!("Locking queues done");
+                            res
+                        };
 
-                        if let Some(partner_user_id) = waiting_users.pop() {
+                        if let Some(partner_user_id) = waiting_users()?.pop() {
                             tracing::debug!("Partner found!");
                             let partner_user =
                                 state.get_user_clone(&partner_user_id).ok_or_internal(
@@ -283,7 +287,7 @@ pub async fn handle_socket(
                             conn.execute("INSERT INTO queue_times (queue_time, queue_id) VALUES ($1, $2)", &[&((user.in_queue_since.elapsed() + partner_user.in_queue_since.elapsed()).as_secs() as i32), &queue_name]).await?;
                         } else {
                             tracing::debug!("Partner not found!");
-                            waiting_users.push(user_id);
+                            waiting_users()?.push(user_id);
                         }
                     }
                     Some("ice-candidate")

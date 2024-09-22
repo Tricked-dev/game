@@ -17,6 +17,7 @@
     "@unocss/reset": "^0.62.4",
     "@unocss/transformer-variant-group": "^0.62.4",
     "astro": "^4.15.8",
+    "puppeteer-core": "^23.4.0",
     "svelte": "5.0.0-next.243",
     "typescript": "^5.6.2",
     "unocss": "^0.62.4",
