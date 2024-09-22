@@ -8,6 +8,10 @@ services:
       - POSTGRES_PASSWORD=postgres
     volumes:
       - timescaledb-data:/home/postgres/pgdata/data
-
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
 volumes:
   timescaledb-data:

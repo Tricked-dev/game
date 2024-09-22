@@ -31,6 +31,12 @@
   let ice_servers: RTCIceServer;
   let wasm = $state(true);
 
+  onMount(async () => {
+    if (localStorage.getItem("autoplay")) {
+      startChat();
+    }
+  });
+
   function startChat() {
     waitingDialog.showModal();
     status = "Starting Connection";

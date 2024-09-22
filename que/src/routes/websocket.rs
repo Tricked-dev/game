@@ -1,4 +1,4 @@
-use std::time::SystemTime;
+use std::time::{Instant, SystemTime};
 
 use axum::{
     extract::{
@@ -121,6 +121,7 @@ pub async fn handle_socket(
         sender: tx.clone(),
         pub_key: None,
         player_id: None,
+        in_queue_since: Instant::now(),
     };
 
     tracing::debug!("{:?}", &state.all_users);
@@ -278,6 +279,8 @@ pub async fn handle_socket(
                                     "Partner not in all_users something broke lol",
                                 )?
                                 .set_partner_id(user_id);
+
+                            conn.execute("INSERT INTO queue_times (queue_time, queue_id) VALUES ($1, $2)", &[&((user.in_queue_since.elapsed() + partner_user.in_queue_since.elapsed()).as_secs() as i32), &queue_name]).await?;
                         } else {
                             tracing::debug!("Partner not found!");
                             waiting_users.push(user_id);

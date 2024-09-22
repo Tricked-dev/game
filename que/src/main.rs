@@ -20,7 +20,7 @@ use ice_servers::{
 };
 use rand_core::OsRng;
 use routes::{leader_board, set_name, signup, submit_game, ws_handler};
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 use strum::EnumMessage;
 use thiserror::Error;
 use tokio::{fs, signal, sync::Mutex};
@@ -93,6 +93,7 @@ struct User {
     sender: tokio::sync::mpsc::UnboundedSender<Message>,
     pub_key: Option<String>,
     player_id: Option<Uuid>,
+    in_queue_since: Instant,
 }
 
 impl User {

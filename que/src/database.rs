@@ -8,7 +8,9 @@ pub async fn init_db(conn: Conn) -> Result<(), UserCreateError> {
             player_id UUID PRIMARY KEY,
             public_key BYTEA NOT NULL,
             secret_key BYTEA NOT NULL,
-            name TEXT NOT NULL
+            name TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+            UNIQUE (public_key)
         );
 
 
@@ -82,17 +84,29 @@ pub async fn init_db(conn: Conn) -> Result<(), UserCreateError> {
     .await
     .ok();
 
-    conn.simple_query("SELECT create_hypertable('moves', by_range('created_at'), if_not_exists => TRUE, migrate_data => TRUE)")
-        .await
-        .ok();
-    conn.simple_query("SELECT create_hypertable('matches', by_range('completed_at'), if_not_exists => TRUE, migrate_data => TRUE)")
-        .await
-        .ok();
     conn.simple_query(
-        "SELECT create_hypertable('started_matches', by_range('created_at'), if_not_exists => TRUE, migrate_data => TRUE)",
+        "CREATE TABLE queue_times (
+        queue_time INTEGER NOT NULL,
+        queue_id UUID NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+    ",
     )
     .await
     .ok();
+
+    macro_rules! create_hypertable {
+        ($table:literal, $column:literal) => {
+            conn.simple_query(&format!("SELECT create_hypertable('{}', by_range('{}'), if_not_exists => TRUE, migrate_data => TRUE)", $table, $column))
+                .await
+                .ok();
+        };
+    }
+
+    create_hypertable!("moves", "created_at");
+    create_hypertable!("matches", "completed_at");
+    create_hypertable!("started_matches", "created_at");
+    create_hypertable!("queue_times", "created_at");
 
     Ok(())
 }
