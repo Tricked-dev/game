@@ -300,7 +300,7 @@ class Peer extends EventEmitter {
   }
 
   __destroy(err) {
-    this._destroy(() => {}, err);
+    this._destroy(() => { }, err);
   }
 
   _destroy(cb, err) {
@@ -332,7 +332,7 @@ class Peer extends EventEmitter {
       if (this._channel) {
         try {
           this._channel.close();
-        } catch (err) {}
+        } catch (err) { }
 
         // allow events concurrent with destruction to be handled
         this._channel.onmessage = null;
@@ -343,7 +343,7 @@ class Peer extends EventEmitter {
       if (this._pc) {
         try {
           this._pc.close();
-        } catch (err) {}
+        } catch (err) { }
 
         // allow events concurrent with destruction to be handled
         this._pc.oniceconnectionstatechange = null;
@@ -356,7 +356,9 @@ class Peer extends EventEmitter {
       this._pc = null;
       this._channel = null;
       if (err) this.emit("error", err);
-      cb();
+      if (typeof cb == "function") {
+        cb();
+      }
     }, 0);
   }
 

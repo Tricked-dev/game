@@ -36,6 +36,27 @@
     if (localStorage.getItem("autoplay")) {
       autoplay = true;
       startChat();
+
+      let dialogOpen = false;
+      setInterval(
+        () => {
+          if (dialogOpen) {
+            if (waitingDialog.open) {
+              try {
+                ws.close();
+              } catch (e) {}
+              waitingDialog.close();
+              resetChat();
+              kickedDialog.close();
+              setTimeout(() => {
+                startChat();
+              }, 200);
+            }
+          }
+          dialogOpen = waitingDialog.open;
+        },
+        2000 + Math.random() * 5000,
+      );
     }
   });
 
@@ -121,7 +142,7 @@
           break;
         default:
           console.log("Signaling message :", message);
-          peerConnection.signal(message as unknown as PeerSignalData);
+          peerConnection?.signal(message as unknown as PeerSignalData);
       }
     };
 
@@ -199,7 +220,9 @@
     };
 
     let onChannelClose = async () => {
-      peerConnection.destroy();
+      try {
+        peerConnection?.destroy();
+      } catch (e) {}
       if (gameState === undefined || gameState?.is_completed) {
         return;
       }
