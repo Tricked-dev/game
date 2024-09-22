@@ -18,7 +18,7 @@ use uuid::{NoContext, Timestamp, Uuid};
 use crate::{
     ice_servers::{IceServerData, IceServers},
     pool_extractor::{Conn, DatabaseConnection},
-    AppState, User, UserCreateError,
+    AllUsers, AppState, User, UserCreateError,
 };
 
 pub async fn ws_handler(
@@ -104,6 +104,37 @@ async fn resolve_user_name(conn: &Conn, pub_key: &str) -> Result<Uuid, UserCreat
     Ok(id)
 }
 
+pub async fn verify_user(
+    conn: &Conn,
+    pub_key: &str,
+    signature: Option<&str>,
+    queue: Option<&str>,
+    secret: u64,
+    all_users: AllUsers,
+    user_id: Uuid,
+) -> Result<Uuid, UserCreateError> {
+    let signature = signature.ok_or_badrequest("Missing signature")?;
+    verify_signature(signature, pub_key, &secret.to_string())?;
+
+    tracing::debug!("Setting pub_key and player_id");
+
+    all_users
+        .get_mut(&user_id)
+        .ok_or_internal("User not in all_users something broke lol")?
+        .set_pub_key(pub_key.to_owned())
+        .set_player_id(resolve_user_name(conn, pub_key).await?);
+
+    tracing::debug!("Locking queues");
+
+    // default to public queue
+    let queue_name = match queue {
+        Some(queue_name) => Uuid::parse_str(queue_name)?,
+        None => Uuid::nil(),
+    };
+
+    Ok(queue_name)
+}
+
 pub async fn handle_socket(
     socket: WebSocket,
     state: AppState,
@@ -157,31 +188,19 @@ pub async fn handle_socket(
                 let data: serde_json::Value = serde_json::from_str(&text)?;
                 match data["type"].as_str() {
                     Some("join") => {
-                        let signature = data["signature"]
-                            .as_str()
-                            .ok_or_badrequest("Missing signature")?;
                         let pub_key = data["pub_key"]
                             .as_str()
                             .ok_or_badrequest("Missing pub_key")?;
-
-                        verify_signature(signature, pub_key, &secret.to_string())?;
-
-                        tracing::debug!("Setting pub_key and player_id");
-
-                        state
-                            .all_users
-                            .get_mut(&user_id)
-                            .ok_or_internal("User not in all_users something broke lol")?
-                            .set_pub_key(pub_key.to_owned())
-                            .set_player_id(resolve_user_name(&conn, pub_key).await?);
-
-                        tracing::debug!("Locking queues");
-
-                        // default to public queue
-                        queue_name = match data["queue"].as_str() {
-                            Some(queue_name) => Uuid::parse_str(queue_name)?,
-                            None => Uuid::nil(),
-                        };
+                        queue_name = verify_user(
+                            &conn,
+                            pub_key,
+                            data["signature"].as_str(),
+                            data["queue"].as_str(),
+                            secret,
+                            state.all_users.clone(),
+                            user_id,
+                        )
+                        .await?;
 
                         let waiting_users = || {
                             tracing::debug!("Locking queues");
@@ -192,7 +211,17 @@ pub async fn handle_socket(
                             res
                         };
 
-                        if let Some(partner_user_id) = waiting_users()?.pop() {
+                        let pop = || {
+                            let mut waiting_users = waiting_users().unwrap();
+                            waiting_users.pop()
+                        };
+
+                        let insert = |user_id: Uuid| {
+                            let mut waiting_users = waiting_users().unwrap();
+                            waiting_users.push(user_id);
+                        };
+
+                        if let Some(partner_user_id) = pop() {
                             tracing::debug!("Partner found!");
                             let partner_user =
                                 state.get_user_clone(&partner_user_id).ok_or_internal(
@@ -287,7 +316,7 @@ pub async fn handle_socket(
                             conn.execute("INSERT INTO queue_times (queue_time, queue_id) VALUES ($1, $2)", &[&((user.in_queue_since.elapsed() + partner_user.in_queue_since.elapsed()).as_secs() as i32), &queue_name]).await?;
                         } else {
                             tracing::debug!("Partner not found!");
-                            waiting_users()?.push(user_id);
+                            insert(user_id);
                         }
                     }
                     Some("ice-candidate")
@@ -328,17 +357,22 @@ pub async fn handle_socket(
         )?;
     }
     tracing::info!("User {:?} disconnected", user_id);
-    let partner_id = state.all_users.get(&user_id).unwrap().partner_id;
-    if let Some(partner_user_id) = partner_id {
-        if let Some(partner_user) = state.all_users.get(&partner_user_id) {
-            partner_user
-                .sender
-                .send(SendMessages::PartnerLeft.to_text_message()?)?;
+    {
+        let partner_id = state.all_users.get(&user_id).unwrap().partner_id;
+        if let Some(partner_user_id) = partner_id {
+            if let Some(partner_user) = state.all_users.get(&partner_user_id) {
+                partner_user
+                    .sender
+                    .send(SendMessages::PartnerLeft.to_text_message()?)?;
+            }
         }
     }
-    if let Some(mut q) = state.queues.get_mut(&queue_name) {
-        q.retain(|&id| id != user_id);
+    {
+        if let Some(mut q) = state.queues.get_mut(&queue_name) {
+            q.retain(|&id| id != user_id);
+        }
     }
+
     state.all_users.remove(&user_id);
     Ok(())
 }

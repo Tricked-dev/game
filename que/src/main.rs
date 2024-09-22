@@ -88,7 +88,7 @@ impl UserCreateError {
 }
 
 #[derive(Clone, Debug)]
-struct User {
+pub struct User {
     partner_id: Option<Uuid>,
     sender: tokio::sync::mpsc::UnboundedSender<Message>,
     pub_key: Option<String>,
@@ -111,10 +111,12 @@ impl User {
     }
 }
 
+pub type AllUsers = Arc<DashMap<Uuid, User>>;
+
 #[derive(Clone)]
 pub struct AppState {
     queues: Arc<DashMap<Uuid, Vec<Uuid>>>,
-    all_users: Arc<DashMap<Uuid, User>>,
+    all_users: AllUsers,
     dice_seed_signing_keys: Arc<Mutex<SigningKey>>,
 }
 
