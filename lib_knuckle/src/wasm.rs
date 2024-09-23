@@ -1,6 +1,7 @@
 use base64::{prelude::BASE64_STANDARD_NO_PAD, Engine};
 use ed25519::signature::SignerMut;
 use ed25519_dalek::{SigningKey, VerifyingKey};
+use uuid::Uuid;
 use wasm_bindgen::{prelude::wasm_bindgen, JsValue};
 
 use crate::{
@@ -32,6 +33,11 @@ pub fn sign_message(key: String, message: String) -> String {
     let signature = my_keys.sign(message.as_bytes());
     let signature = signature.to_vec();
     BASE64_STANDARD_NO_PAD.encode(signature)
+}
+
+#[wasm_bindgen]
+pub fn random_uuid() -> String {
+    Uuid::new_v4().to_string()
 }
 
 #[wasm_bindgen]

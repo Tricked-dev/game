@@ -7,7 +7,6 @@ use axum_thiserror::ErrorStatus;
 use bb8::Pool;
 use bb8_postgres::PostgresConnectionManager;
 use clap::Parser;
-use dashmap::DashMap;
 use database::init_db;
 use ed25519_dalek::SigningKey;
 use embed::static_handler;
@@ -20,6 +19,7 @@ use ice_servers::{
 };
 use rand_core::OsRng;
 use routes::{leader_board, set_name, signup, submit_game, ws_handler};
+use scc::HashMap;
 use std::{sync::Arc, time::Instant};
 use strum::EnumMessage;
 use thiserror::Error;
@@ -111,11 +111,11 @@ impl User {
     }
 }
 
-pub type AllUsers = Arc<DashMap<Uuid, User>>;
+pub type AllUsers = Arc<HashMap<Uuid, User>>;
 
 #[derive(Clone)]
 pub struct AppState {
-    queues: Arc<DashMap<Uuid, Vec<Uuid>>>,
+    queues: Arc<HashMap<Uuid, Vec<Uuid>>>,
     all_users: AllUsers,
     dice_seed_signing_keys: Arc<Mutex<SigningKey>>,
 }
@@ -188,12 +188,12 @@ async fn main() {
     };
 
     let app_state = AppState {
-        queues: Arc::new(DashMap::new()),
-        all_users: Arc::new(DashMap::new()),
+        queues: Arc::new(HashMap::new()),
+        all_users: Arc::new(HashMap::new()),
         dice_seed_signing_keys: Arc::new(Mutex::new(dice_seed_signing_keys)),
     };
 
-    app_state.queues.insert(Uuid::nil(), Vec::new());
+    app_state.queues.insert(Uuid::nil(), Vec::new()).ok();
 
     let uuid_clock = ContextV7::new();
 

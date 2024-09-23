@@ -117,12 +117,13 @@ pub async fn verify_user(
     verify_signature(signature, pub_key, &secret.to_string())?;
 
     tracing::debug!("Setting pub_key and player_id");
+    let id = resolve_user_name(conn, pub_key).await?;
 
     all_users
-        .get_mut(&user_id)
-        .ok_or_internal("User not in all_users something broke lol")?
-        .set_pub_key(pub_key.to_owned())
-        .set_player_id(resolve_user_name(conn, pub_key).await?);
+        .update_async(&user_id, |_, item| {
+            item.set_pub_key(pub_key.to_owned()).set_player_id(id);
+        })
+        .await;
 
     tracing::debug!("Locking queues");
 
@@ -159,7 +160,7 @@ pub async fn handle_socket(
     let secret = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)?
         .as_secs();
-    state.all_users.insert(user_id, user);
+    state.all_users.insert(user_id, user).ok();
     tracing::debug!("Sending Verify");
 
     sender
@@ -202,26 +203,13 @@ pub async fn handle_socket(
                         )
                         .await?;
 
-                        let waiting_users = || {
-                            tracing::debug!("Locking queues");
-                            let res = state.queues.get_mut(&queue_name).ok_or_internal(
-                                "User not in all_users something broke lol",
-                            );
-                            tracing::debug!("Locking queues done");
-                            res
-                        };
+                        let mut entry = state
+                            .queues
+                            .entry_async(queue_name)
+                            .await
+                            .or_insert(Vec::with_capacity(2));
 
-                        let pop = || {
-                            let mut waiting_users = waiting_users().unwrap();
-                            waiting_users.pop()
-                        };
-
-                        let insert = |user_id: Uuid| {
-                            let mut waiting_users = waiting_users().unwrap();
-                            waiting_users.push(user_id);
-                        };
-
-                        if let Some(partner_user_id) = pop() {
+                        if let Some(partner_user_id) = entry.get_mut().pop() {
                             tracing::debug!("Partner found!");
                             let partner_user =
                                 state.get_user_clone(&partner_user_id).ok_or_internal(
@@ -300,23 +288,21 @@ pub async fn handle_socket(
 
                             state
                                 .all_users
-                                .get_mut(&user_id)
-                                .ok_or_internal(
-                                    "Partner not in all_users something broke lol",
-                                )?
-                                .set_partner_id(partner_user_id);
+                                .update_async(&user_id, |_, item| {
+                                    item.set_partner_id(partner_user_id);
+                                })
+                                .await;
                             state
                                 .all_users
-                                .get_mut(&partner_user_id)
-                                .ok_or_internal(
-                                    "Partner not in all_users something broke lol",
-                                )?
-                                .set_partner_id(user_id);
+                                .update_async(&partner_user_id, |_, item| {
+                                    item.set_partner_id(user_id);
+                                })
+                                .await;
 
                             conn.execute("INSERT INTO queue_times (queue_time, queue_id) VALUES ($1, $2)", &[&((user.in_queue_since.elapsed() + partner_user.in_queue_since.elapsed()).as_secs() as i32), &queue_name]).await?;
                         } else {
                             tracing::debug!("Partner not found!");
-                            insert(user_id);
+                            entry.get_mut().push(user_id);
                         }
                     }
                     Some("ice-candidate")
@@ -368,9 +354,9 @@ pub async fn handle_socket(
         }
     }
     {
-        if let Some(mut q) = state.queues.get_mut(&queue_name) {
+        state.queues.entry_async(queue_name).await.and_modify(|q| {
             q.retain(|&id| id != user_id);
-        }
+        });
     }
 
     state.all_users.remove(&user_id);

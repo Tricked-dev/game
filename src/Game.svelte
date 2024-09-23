@@ -2,7 +2,14 @@
 
 <script lang="ts">
   import { onMount } from "svelte";
-  import { Game, sign_message, type BoardData, type GameBody, type LeaderBoard } from "./lib/wasmdev/lib_knuckle";
+  import {
+    Game,
+    sign_message,
+    random_uuid,
+    type BoardData,
+    type GameBody,
+    type LeaderBoard,
+  } from "./lib/wasmdev/lib_knuckle";
   import Peer, { type PeerSignalData } from "./lib/peer/lite";
   const boardSize = {
     width: 3,
@@ -23,6 +30,7 @@
   let waitingDialog: HTMLDialogElement = $state(null!);
   let kickedDialog: HTMLDialogElement = $state(null!);
   let userDialog: HTMLDialogElement = $state(null!);
+  let queueId: string | undefined = $state();
 
   let status: string | undefined = $state();
 
@@ -32,30 +40,59 @@
   let wasm = $state(true);
   let autoplay = $state(false);
 
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  // uses the window crypto is available for faster performance
+  // otherwise falls back to a rust call which is MUCH slower
+  // i know randomUUID wont work in non localhost http so thats why i use the fallback
+  function genUUID() {
+    try {
+      return window.crypto.randomUUID();
+    } catch (e) {
+      return random_uuid();
+    }
+  }
+
   onMount(async () => {
     if (localStorage.getItem("autoplay")) {
       autoplay = true;
       startChat();
 
-      let dialogOpen = false;
+      let waitingDialogOpen = false;
+      let kickedDialogOpen = false;
+      let disconnectedDialogOpen = false;
       setInterval(
         () => {
-          if (dialogOpen) {
+          if (waitingDialogOpen) {
             if (waitingDialog.open) {
-              try {
-                ws.close();
-              } catch (e) {}
-              waitingDialog.close();
-              resetChat();
-              kickedDialog.close();
-              setTimeout(() => {
-                startChat();
-              }, 200);
+              window.location.reload();
             }
           }
-          dialogOpen = waitingDialog.open;
+          waitingDialogOpen = waitingDialog.open;
         },
-        2000 + Math.random() * 5000,
+        3000 + Math.random() * 5000,
+      );
+      setInterval(
+        () => {
+          if (kickedDialogOpen) {
+            if (kickedDialog.open) {
+              window.location.reload();
+            }
+          }
+          kickedDialogOpen = kickedDialog.open;
+        },
+        3000 + Math.random() * 5000,
+      );
+      setInterval(
+        () => {
+          if (disconnectedDialogOpen) {
+            if (disconnectedDialog.open) {
+              window.location.reload();
+            }
+          }
+          disconnectedDialogOpen = disconnectedDialog.open;
+        },
+        9000 + Math.random() * 5000,
       );
     }
   });
@@ -94,6 +131,7 @@
               type: "join",
               signature: response,
               pub_key: json.pub_key,
+              queue: queueId,
             }),
           );
           pub_key = json.pub_key;
@@ -167,7 +205,16 @@
     peerConnection.on("signal", (data) => {
       ws.send(JSON.stringify(data));
     });
+
     function playRandomMove() {
+      if (!autoplay) {
+        return;
+      }
+      if (((Math.random() * 200) | 0) == 5) {
+        let result = game.w_forfeit();
+        peerConnection.send(result);
+        return;
+      }
       let xs: Set<number> = new Set();
       for (const [index, element] of gameState.decks.me.entries()) {
         if (element == 0) {
@@ -199,8 +246,12 @@
 
       if (autoplay) {
         if (gameState.is_completed) {
+          await sleep(1000);
           resetChat();
+          await sleep(1000);
+          dialog.close();
           disconnectedDialog.close();
+          await sleep(1000);
           startChat();
           return;
         } else {
@@ -211,8 +262,12 @@
           playRandomMove();
           gameState = game.w_get_board_data();
           if (gameState?.is_completed) {
+            await sleep(1000);
             resetChat();
+            await sleep(1000);
+            dialog.close();
             disconnectedDialog.close();
+            await sleep(1000);
             startChat();
           }
         }
@@ -240,8 +295,11 @@
       peerConnection._channel.onmessage = onMessage;
       peerConnection._channel.onclose = onChannelClose;
 
-      if (gameState.your_turn) {
-        playRandomMove();
+      if (autoplay && gameState.your_turn) {
+        setTimeout(() => {
+          playRandomMove();
+          gameState = game.w_get_board_data();
+        }, 250);
       }
     });
     peerConnection.on("close", () => {
@@ -477,6 +535,9 @@
   <div class="flex flex-col z-50">
     Waiting for a opponent to join.
     <img src="/assets/waiting.png" alt="" class="" />
+    {#if queueId}
+      Queue Id <span onclick={() => window.navigator.clipboard.writeText(queueId ?? "")}>{queueId}</span>
+    {/if}
   </div>
 </dialog>
 
@@ -674,6 +735,20 @@
         <button onclick={startChat} class=":uno: mt-auto hover:brightness-110">
           <img src="/assets/start-btn.png" class="h-24" alt="" />
         </button>
+        <div>
+          <button
+            onclick={() => {
+              queueId = prompt("Enter a queue id", queueId) ?? undefined;
+              startChat();
+            }}>Join Private Match</button
+          >
+          <button
+            onclick={() => {
+              queueId = genUUID();
+              startChat();
+            }}>Start Private Match</button
+          >
+        </div>
       </div>
     </div>
   </div>

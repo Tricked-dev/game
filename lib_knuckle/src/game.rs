@@ -130,9 +130,9 @@ impl Game {
     pub fn test_place(&mut self, x: u16) -> Result<(), String> {
         let signed_item = self.create_history_for_placing(x)?;
         self.seq += 1;
-        self.validate_move(&signed_item)?;
+        let result = self.validate_move(&signed_item);
         self.seq -= 1;
-        Ok(())
+        result.map(|_| ())
     }
 
     fn create_history_for_placing(&mut self, x: u16) -> Result<HistoryItem, String> {

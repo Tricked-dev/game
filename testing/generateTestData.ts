@@ -20,7 +20,12 @@ const run = async () => {
   const botPath = path.resolve(__dirname, "bot.ts");
 
   try {
-    Promise.all([spawnWorker(botPath), spawnWorker(botPath), spawnWorker(botPath)]);
+    let count = 2;
+    let workers = [];
+    for (let i = 0; i < count; i++) {
+      workers.push(spawnWorker(botPath));
+    }
+    Promise.all(workers);
     console.log("Both bots spawned successfully.");
   } catch (error) {
     console.error("Error spawning bots:", error);

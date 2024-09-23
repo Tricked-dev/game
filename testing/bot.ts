@@ -13,20 +13,20 @@ const spawnBot = async () => {
   await page.setViewport({ width: 1080, height: 1024 });
   await page.evaluate(() => localStorage.setItem("autoplay", "true"));
   await page.reload();
-  // setInterval(
-  //   async () => {
-  //     await page.reload();
-  //     await page.goto("http://localhost:4321");
-  //   },
-  //   Math.random() * (1000 * 120),
-  // );
+  setInterval(
+    async () => {
+      await page.reload();
+      await page.goto("http://localhost:4321");
+    },
+    Math.random() * (1000 * 15000),
+  );
 
-  // setInterval(
-  //   async () => {
-  //     await localStorage.removeItem("userInfo");
-  //     await page.reload();
-  //   },
-  //   Math.random() * (1000 * 600),
-  // );
+  setInterval(
+    async () => {
+      await page.evaluate(() => localStorage.removeItem("userInfo"));
+      await page.reload();
+    },
+    Math.random() * (1000 * 6000),
+  );
 };
 await spawnBot();
