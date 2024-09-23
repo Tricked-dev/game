@@ -203,13 +203,16 @@ pub async fn handle_socket(
                         )
                         .await?;
 
-                        let mut entry = state
-                            .queues
-                            .entry_async(queue_name)
-                            .await
-                            .or_insert(Vec::with_capacity(2));
+                        let pop = || async {
+                            let mut entry = state
+                                .queues
+                                .entry_async(queue_name)
+                                .await
+                                .or_insert(Vec::with_capacity(2));
+                            entry.get_mut().pop()
+                        };
 
-                        if let Some(partner_user_id) = entry.get_mut().pop() {
+                        if let Some(partner_user_id) = pop().await {
                             tracing::debug!("Partner found!");
                             let partner_user =
                                 state.get_user_clone(&partner_user_id).ok_or_internal(
@@ -302,6 +305,11 @@ pub async fn handle_socket(
                             conn.execute("INSERT INTO queue_times (queue_time, queue_id) VALUES ($1, $2)", &[&((user.in_queue_since.elapsed() + partner_user.in_queue_since.elapsed()).as_secs() as i32), &queue_name]).await?;
                         } else {
                             tracing::debug!("Partner not found!");
+                            let mut entry = state
+                                .queues
+                                .entry_async(queue_name)
+                                .await
+                                .or_insert(Vec::with_capacity(2));
                             entry.get_mut().push(user_id);
                         }
                     }
@@ -354,9 +362,12 @@ pub async fn handle_socket(
         }
     }
     {
-        state.queues.entry_async(queue_name).await.and_modify(|q| {
-            q.retain(|&id| id != user_id);
-        });
+        state
+            .queues
+            .update_async(&queue_name, |_, q| {
+                q.retain(|&id| id != user_id);
+            })
+            .await;
     }
 
     state.all_users.remove(&user_id);
