@@ -11,6 +11,15 @@
     type LeaderBoard,
   } from "./lib/wasmdev/lib_knuckle";
   import Peer, { type PeerSignalData } from "./lib/peer/lite";
+  import Dice from "$lib/components/Dice.svelte";
+
+  const dices = import.meta.glob("./assets/dices-*.png", {
+    eager: true,
+    query: {
+      enhanced: true,
+    },
+  });
+
   const boardSize = {
     width: 3,
     height: 3,
@@ -418,30 +427,6 @@
   let name = $state("");
 </script>
 
-{#snippet dice(number: number, occurrences: number)}
-  <style>
-    .glow-yellow {
-      filter: drop-shadow(0 0 10px yellow);
-    }
-
-    .glow-red {
-      filter: drop-shadow(0 0 10px red);
-    }
-  </style>
-  {@const color = occurrences == 2 ? "glow-yellow" : occurrences == 3 ? "glow-red" : ""}
-  <div class="relative w-full h-full">
-    {#if number != 0}
-      <img
-        src="/assets/dices-base.png"
-        alt="dice"
-        class="absolute left-0 top-0 h-full w-full {color}"
-        draggable="false"
-      />
-      <img src="/assets/dices-{number}.png" alt="dice" class="absolute left-0 top-0 h-full w-full" draggable="false" />
-    {/if}
-  </div>
-{/snippet}
-
 {#snippet diceLayout(
   deck: number[],
   points: number[],
@@ -451,7 +436,9 @@
   {#each deck ?? [] as row, index}
     {@const occurrences = highLights[index % 3]?.[row] ?? 0}
     <button
-      class="md:size-28 size-20 flex justify-center text-center text-3xl p-4 {row == 0 ? 'hover:brightness-110' : ''}"
+      class="md:size-28 size-20 relative flex justify-center text-center text-3xl p-4 {row == 0
+        ? 'hover:brightness-110'
+        : ''}"
       onclick={() => {
         console.log("Dropped");
         onclick(index);
@@ -461,10 +448,9 @@
         event.preventDefault();
         event.dataTransfer!.dropEffect = "copy";
       }}
-      style:background-image="url(/assets/dice-bg.png)"
-      style:background-size="cover"
     >
-      {@render dice(row, occurrences)}
+      <enhanced:img src="./assets/dice-bg.png" alt="" class="absolute left-0 top-0 h-full w-full" />
+      <Dice number={row} {occurrences}></Dice>
     </button>
   {/each}
   {#each points ?? [] as row}
@@ -484,29 +470,29 @@
 
 <dialog bind:this={dialog} class="bg-transparent text-white">
   <div class="flex flex-col h-[50rem] w-[20rem]">
-    <img src="/assets/ending-base.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}" />
+    <enhanced:img src="./assets/ending-base.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}" />
     {#if gameState?.winner.winner}
-      <img src="/assets/ending-win.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}" />
+      <enhanced:img src="./assets/ending-win.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}" />
     {:else if gameState?.winner?.win_by_tie}
-      <img src="/assets/ending-draw.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}" />
+      <enhanced:img src="./assets/ending-draw.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}" />
     {:else}
-      <img src="/assets/ending-lose.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}" />
+      <enhanced:img src="./assets/ending-lose.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}" />
     {/if}
     <div class="w-full h-full z-10 absolute left-0 top-0 flex flex-col justify-center items-center">
       <div class="ml-4 absolute left-0 top-48 text-5xl flex text-nowrap">
-        <img src="/assets/end-texts-your.png" class="h-10" alt="" />: {gameState?.points?.me?.reduce(
+        <enhanced:img src="./assets/end-texts-your.png" class="h-10" alt="" />: {gameState?.points?.me?.reduce(
           (a, b) => a + b,
           0,
         )}
       </div>
       <div class="ml-4 absolute left-0 top-60 text-5xl flex text-nowrap">
-        <img src="/assets/end-texts-opponent.png" alt="" class="h-10" />: {gameState?.points?.other?.reduce(
+        <enhanced:img src="./assets/end-texts-opponent.png" alt="" class="h-10" />: {gameState?.points?.other?.reduce(
           (a, b) => a + b,
           0,
         )}
       </div>
       <div class="ml-4 absolute left-0 top-72 text-5xl flex terxt-nowrap">
-        <img src="/assets/end-texts-total.png" class="h-10" alt="" />: {gameState?.seq}
+        <enhanced:img src="./assets/end-texts-total.png" class="h-10" alt="" />: {gameState?.seq}
       </div>
       <button
         class="mt-auto mx-auto mb-10"
@@ -515,7 +501,7 @@
           dialog.close();
         }}
       >
-        <img src="/assets/start-again.png" alt="" class="hover:brightness-110" />
+        <enhanced:img src="./assets/start-again.png" alt="" class="hover:brightness-110" />
       </button>
     </div>
   </div>
@@ -534,7 +520,7 @@
 <dialog bind:this={waitingDialog} class=":uno: bg-transparent text-white outline-none">
   <div class="flex flex-col z-50">
     Waiting for a opponent to join.
-    <img src="/assets/waiting.png" alt="" class="" />
+    <enhanced:img src="./assets/waiting.png" alt="" class="" />
     {#if queueId}
       Queue Id <span onclick={() => window.navigator.clipboard.writeText(queueId ?? "")}>{queueId}</span>
     {/if}
@@ -546,7 +532,7 @@
 </dialog>
 
 <dialog bind:this={userDialog} class=":uno: bg-transparent text-white outline-none w-[40rem] h-[70rem]">
-  <img src="/assets/options.png" alt="" class=":uno: absolute left-0 top-0 h-full w-full aspect-[2/5]" />
+  <enhanced:img src="./assets/options.png" alt="" class=":uno: absolute left-0 top-0 h-full w-full aspect-[2/5]" />
 
   <div class=":uno: absolute px-16 flex flex-col h-full w-full pt-60 pb-10">
     <label class="text-5xl">
@@ -606,7 +592,7 @@
         }
       }}
     >
-      <img src="/assets/save.png" alt="" class="brightness-125 hover:brightness-110 w-72" />
+      <enhanced:img src="./assets/save.png" alt="" class="brightness-125 hover:brightness-110 w-72" />
     </button>
   </div>
   <button
@@ -615,7 +601,7 @@
       userDialog.close();
     }}
   >
-    <img src="/assets/close.png" alt="" class=":uno: size-12 hover:brightness-110 rounded-xl" />
+    <enhanced:img src="./assets/close.png" alt="" class=":uno: size-12 hover:brightness-110 rounded-xl" />
   </button>
 </dialog>
 
@@ -630,8 +616,12 @@
     <div class="ml-auto">
       <div class="flex flex-col justify-center">
         <div class="">
-          <img src="/assets/turns-your.png" alt="" style:display={gameState?.your_turn ? "block" : "none"} />
-          <img src="/assets/turns-other.png" alt="" style:display={!gameState?.your_turn ? "block" : "none"} />
+          <enhanced:img src="./assets/turns-your.png" alt="" style:display={gameState?.your_turn ? "block" : "none"} />
+          <enhanced:img
+            src="./assets/turns-other.png"
+            alt=""
+            style:display={!gameState?.your_turn ? "block" : "none"}
+          />
 
           <button
             class="mx-auto mb-10 my-4"
@@ -642,7 +632,7 @@
               gameState = game.w_get_board_data();
             }}
           >
-            <img src="/assets/turns-forfeit.png" alt="" class="hover:brightness-110" />
+            <enhanced:img src="./assets/turns-forfeit.png" alt="" class="hover:brightness-110" />
           </button>
         </div>
         {#each [1, 2, 3, 4, 5, 6] as i}
@@ -658,7 +648,7 @@
               console.log("Dragging ended");
             }}
           >
-            {@render dice(i, 0)}
+            <Dice number={i} occurrences={0}></Dice>
           </div>
         {/each}
       </div>
@@ -697,7 +687,7 @@
 {:else}
   <div class=":uno: w-full h-full flex justify-center items-center relative rounded-xl text-white">
     <div class=":uno: h-[40rem] w-[20rem] relative">
-      <img src="/assets/start-bg.png" alt="" class="absolute left-0 top-0 h-full w-full rounded-xl" />
+      <enhanced:img src="./assets/start-bg.png" alt="" class="absolute left-0 top-0 h-full w-full rounded-xl" />
       <div class=":uno: absolute left-0 top-0 h-full w-full flex flex-col justify-center items-center p-4">
         <span class=":uno: text-4xl text-center font-semibold">KnuckleBones</span>
         <a class=":uno: text-center" href="https://tricked.dev">By Tricked</a>
@@ -733,7 +723,7 @@
         {/if}
 
         <button onclick={startChat} class=":uno: mt-auto hover:brightness-110">
-          <img src="/assets/start-btn.png" class="h-24" alt="" />
+          <enhanced:img src="./assets/start-btn.png" class="h-24" alt="" />
         </button>
         <div class="flex justify-center gap-2">
           <button
@@ -744,8 +734,8 @@
               else startChat();
             }}
           >
-            <img src="/assets/private-btns-bg.png" class="w-full h-full absolute left-0 top-0" />
-            <img src="/assets/private-btns-join.png" class="w-full h-full absolute left-0 top-0" />
+            <enhanced:img src="./assets/private-btns-bg.png" class="w-full h-full absolute left-0 top-0" />
+            <enhanced:img src="./assets/private-btns-join.png" class="w-full h-full absolute left-0 top-0" />
           </button>
           <button
             class="h-16 w-30 relative hover:brightness-110"
@@ -754,8 +744,8 @@
               startChat();
             }}
           >
-            <img src="/assets/private-btns-bg.png" class="w-full h-full absolute left-0 top-0" />
-            <img src="/assets/private-btns-start.png" class="w-full h-full absolute left-0 top-0" />
+            <enhanced:img src="./assets/private-btns-bg.png" class="w-full h-full absolute left-0 top-0" />
+            <enhanced:img src="./assets/private-btns-start.png" class="w-full h-full absolute left-0 top-0" />
           </button>
         </div>
       </div>
@@ -767,7 +757,7 @@
       userDialog.showModal();
     }}
   >
-    <enhanced:img class="size-16" src="$assets/user.png" />
+    <enhanced:img class="size-16" src="./assets/user.png" />
   </button>
 {/if}
 
@@ -783,17 +773,17 @@
     </span>
     <div class="flex justify-center gap-4">
       <div class="size-12">
-        {@render dice(1, 0)}
+        <Dice number={1} occurrences={0}></Dice>
       </div>
       <div class="size-12">
-        {@render dice(2, 2)}
+        <Dice number={2} occurrences={2}></Dice>
       </div>
       <div class="size-12">
-        {@render dice(3, 3)}
+        <Dice number={3} occurrences={3}></Dice>
       </div>
     </div>
     <span class="flex justify-center text-8xl text-center w-full gap-2">
-      <img src="/assets/end-texts-your.png" />
+      <enhanced:img src="./assets/end-texts-your.png" />
       <span class="text-8xl text-center w-full">0</span>
     </span>
   </noscript>

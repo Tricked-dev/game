@@ -3,13 +3,13 @@ use http::{header, StatusCode, Uri};
 use rust_embed::Embed;
 
 #[derive(Embed)]
-#[folder = "../dist"]
+#[folder = "../build"]
 struct Asset;
 
 pub async fn static_handler(uri: Uri) -> impl IntoResponse {
     let mut path = uri.path().trim_start_matches('/').to_string();
-    if path.is_empty() {
-        path = "index.html".to_string();
+    if path.is_empty() || path == "index.html" || path == "index" {
+        path = "200.html".to_string();
     }
     StaticFile(path)
 }

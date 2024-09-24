@@ -202,6 +202,7 @@ async fn main() {
         .route("/assets/*file", get(static_handler))
         .route("/fonts/*file", get(static_handler))
         .route("/og/*file", get(static_handler))
+        .route("/_app/*file", get(static_handler))
         .route("/", get(static_handler))
         .route("/index.html", get(static_handler))
         .route("/signup", get(signup))

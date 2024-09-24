@@ -1,0 +1,18 @@
+body,
+html {
+  font-family: "Thaleah", "Pixelify Sans";
+  background-image: url("/assets/background2.png");
+  background-repeat: repeat;
+  background-color: black;
+}
+body {
+  min-height: 100vh;
+}
+body:has(dialog[open]) {
+  filter: blur(1px) brightness(0.8);
+}
+
+@font-face {
+  font-family: "Thaleah";
+  src: url("/fonts/ThaleahFat.ttf");
+}

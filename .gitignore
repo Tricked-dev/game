@@ -27,3 +27,9 @@ wasmdev
 wasmprd
 server_seed
 deploy.sh
+
+.output
+.vercel
+/.svelte-kit
+/build
+ref
