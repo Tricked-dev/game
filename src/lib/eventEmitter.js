@@ -1,12 +1,27 @@
+//@ts-nocheck
+
+/**
+ * @template T
+ * @param {T[]} haystack
+ * @param {T} needle
+ * @returns number
+ */
 function indexOf(haystack, needle) {
   return haystack.indexOf(needle);
 }
 
-/* Polyfill EventEmitter. */
+/**
+ * @class EventEmitter
+ * @property {Record<string, (...args:unknown[])=>unknown>} events
+ */
 var EventEmitter = function () {
   this.events = {};
 };
 
+/**
+ * @param {string} event
+ * @param {function} listener
+ */
 EventEmitter.prototype.on = function (event, listener) {
   if (typeof this.events[event] !== "object") {
     this.events[event] = [];
@@ -27,6 +42,10 @@ EventEmitter.prototype.removeListener = function (event, listener) {
   }
 };
 
+/**
+ * @param {string} event
+ * @param {unknown[]} params
+ */
 EventEmitter.prototype.emit = function (event) {
   var i,
     listeners,
@@ -43,6 +62,10 @@ EventEmitter.prototype.emit = function (event) {
   }
 };
 
+/**
+ * @param {string} event
+ * @param {function} listener
+ */
 EventEmitter.prototype.once = function (event, listener) {
   this.on(event, function g() {
     this.removeListener(event, g);

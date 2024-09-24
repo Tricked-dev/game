@@ -2,7 +2,7 @@ services:
   timescaledb:
     image: timescale/timescaledb-ha:pg16
     container_name: timescaledb
-    restart: never
+    restart: no
     ports:
       - "5432:5432"
     environment:
@@ -12,7 +12,7 @@ services:
   grafana:
     image: grafana/grafana:latest
     container_name: grafana
-    restart: never
+    restart: no
     ports:
       - "3000:3000"
 volumes:

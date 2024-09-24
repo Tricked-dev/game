@@ -1,4 +1,4 @@
-import { RTCIceCandidate, RTCPeerConnection, RTCSessionDescription } from "webrtc-polyfill";
+// import { RTCIceCandidate, RTCPeerConnection, RTCSessionDescription } from "webrtc-polyfill";
 import { arr2hex, randomBytes, text2arr } from "uint8-util";
 
 import { EventEmitter } from "../eventEmitter";
@@ -300,7 +300,7 @@ class Peer extends EventEmitter {
   }
 
   __destroy(err) {
-    this._destroy(() => { }, err);
+    this._destroy(() => {}, err);
   }
 
   _destroy(cb, err) {
@@ -332,7 +332,7 @@ class Peer extends EventEmitter {
       if (this._channel) {
         try {
           this._channel.close();
-        } catch (err) { }
+        } catch (err) {}
 
         // allow events concurrent with destruction to be handled
         this._channel.onmessage = null;
@@ -343,7 +343,7 @@ class Peer extends EventEmitter {
       if (this._pc) {
         try {
           this._pc.close();
-        } catch (err) { }
+        } catch (err) {}
 
         // allow events concurrent with destruction to be handled
         this._pc.oniceconnectionstatechange = null;
@@ -841,7 +841,7 @@ class Peer extends EventEmitter {
   }
 }
 
-Peer.WEBRTC_SUPPORT = !!RTCPeerConnection;
+Peer.WEBRTC_SUPPORT = "RTCPeerConnection" in globalThis;
 
 /**
  * Expose peer and data channel config for overriding all Peer

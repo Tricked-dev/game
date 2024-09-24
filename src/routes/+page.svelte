@@ -3,12 +3,6 @@
   import Game from "../Game.svelte";
   import "../global.css";
   import "@fontsource/pixelify-sans";
-  import "virtual:uno.css";
-  import "@unocss/reset/normalize.css";
-  import "@unocss/reset/sanitize/sanitize.css";
-  import "@unocss/reset/sanitize/assets.css";
-  import "@unocss/reset/eric-meyer.css";
-  import "@unocss/reset/tailwind.css";
 
   const site = `https://knucklebones.fyi/`;
 

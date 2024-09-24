@@ -455,12 +455,9 @@
   {/each}
   {#each points ?? [] as row}
     <div class="flex justify-center">
-      <div
-        class="md:size-20 size-12 flex justify-center text-white text-center text-3xl"
-        style:background-image="url(/assets/number-base.png)"
-        style:background-size="cover"
-      >
-        <div class="m-auto">
+      <div class="md:size-20 size-12 flex justify-center text-white text-center text-3xl relative">
+        <enhanced:img src="$assets/number-base.png" alt="" class="absolute left-0 top-0 h-full w-full"> </enhanced:img>
+        <div class="absolute top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%]">
           {row}
         </div>
       </div>
@@ -723,7 +720,7 @@
         {/if}
 
         <button onclick={startChat} class=":uno: mt-auto hover:brightness-110">
-          <enhanced:img src="./assets/start-btn.png" class="h-24" alt="" />
+          <enhanced:img src="./assets/start-btn.png" class="h-24 w-50" alt="" />
         </button>
         <div class="flex justify-center gap-2">
           <button
