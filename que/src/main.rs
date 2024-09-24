@@ -122,7 +122,7 @@ pub struct AppState {
 
 impl AppState {
     fn get_user_clone(&self, user_id: &Uuid) -> Option<User> {
-        self.all_users.get(user_id).map(|v| v.clone())
+        self.all_users.read(user_id, |_, v| v.clone())
     }
 }
 

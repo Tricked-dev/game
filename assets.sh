@@ -25,3 +25,4 @@ layerAse2png dices
 layerAse2png turns
 layerAse2png ending
 layerAse2png end-texts
+layerAse2png private-btns

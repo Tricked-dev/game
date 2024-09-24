@@ -2,6 +2,7 @@ import { presetUno, transformerCompileClass, transformerDirectives, transformerV
 
 import UnoCSS from "unocss/astro";
 import { defineConfig } from "astro/config";
+import { enhancedImages } from "@sveltejs/enhanced-img";
 import extractorSvelte from "@unocss/extractor-svelte";
 import { presetScrollbar } from "unocss-preset-scrollbar";
 import svelte from "@astrojs/svelte";
@@ -45,6 +46,6 @@ export default defineConfig({
     },
   ],
   vite: {
-    plugins: [wasm()],
+    plugins: [enhancedImages(), wasm()],
   },
 });

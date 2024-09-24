@@ -735,19 +735,28 @@
         <button onclick={startChat} class=":uno: mt-auto hover:brightness-110">
           <img src="/assets/start-btn.png" class="h-24" alt="" />
         </button>
-        <div>
+        <div class="flex justify-center gap-2">
           <button
+            class="h-16 w-30 relative hover:brightness-110"
             onclick={() => {
               queueId = prompt("Enter a queue id", queueId) ?? undefined;
-              startChat();
-            }}>Join Private Match</button
+              if (queueId == undefined) alert("Cancelled");
+              else startChat();
+            }}
           >
+            <img src="/assets/private-btns-bg.png" class="w-full h-full absolute left-0 top-0" />
+            <img src="/assets/private-btns-join.png" class="w-full h-full absolute left-0 top-0" />
+          </button>
           <button
+            class="h-16 w-30 relative hover:brightness-110"
             onclick={() => {
               queueId = genUUID();
               startChat();
-            }}>Start Private Match</button
+            }}
           >
+            <img src="/assets/private-btns-bg.png" class="w-full h-full absolute left-0 top-0" />
+            <img src="/assets/private-btns-start.png" class="w-full h-full absolute left-0 top-0" />
+          </button>
         </div>
       </div>
     </div>
@@ -758,7 +767,7 @@
       userDialog.showModal();
     }}
   >
-    <img class="h-16" src="/assets/user.png" />
+    <enhanced:img class="size-16" src="$assets/user.png" />
   </button>
 {/if}
 
