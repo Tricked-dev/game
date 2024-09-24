@@ -42,6 +42,7 @@ export default defineConfig({
           classPrefix: "supercss-",
         }),
       ],
+      safelist: ["ml-auto"],
       details: true,
     }),
     wasm(),

@@ -2,18 +2,6 @@
 
 ![Knucklebones Game Screenshot](./public/og/og.png)
 
-## TODO:
-
-- Ui improvements
-- Backend service to store results in
-- proper logging
-- look into deadlock
-- Handle unexpected ws connection disconnect
-
-## Dashboard Metrics Ideas:
-
-- Average rounds per forfeit / win
-
 ## Turn servers
 
 To enable turn servers you need to set the `TURN_TOKEN_ID` and `API_TOKEN` environment variables.

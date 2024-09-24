@@ -195,7 +195,9 @@
 
     ws.onclose = () => {
       if (gameState !== undefined) return;
+      console.log("Closed Dialog");
       waitingDialog.close();
+      if (!status) status = "Websocket closed";
       kickedDialog.showModal();
     };
   }
@@ -298,8 +300,8 @@
     peerConnection.on("connect", () => {
       console.log("Connected to peer");
       setTimeout(() => {
-        ws.close();
-      }, 15000);
+        // ws.close();
+      }, 1000);
       status = undefined;
       peerConnection._channel.onmessage = onMessage;
       peerConnection._channel.onclose = onChannelClose;
@@ -610,8 +612,8 @@
   {/if}
 
   <div class="flex gap-4 mx-auto">
-    <div class="ml-auto">
-      <div class="flex flex-col justify-center">
+    <div class="ml-auto flex flex-grow mb-auto">
+      <div class="flex flex-col mb-auto">
         <div class="">
           <enhanced:img src="./assets/turns-your.png" alt="" style:display={gameState?.your_turn ? "block" : "none"} />
           <enhanced:img
