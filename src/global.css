@@ -12,6 +12,10 @@ body:has(dialog[open]) {
   filter: blur(1px) brightness(0.8);
 }
 
+p-4 {
+  padding: 1rem;
+}
+
 @font-face {
   font-family: "Thaleah";
   src: url("/fonts/ThaleahFat.ttf");

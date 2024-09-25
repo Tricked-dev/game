@@ -1,11 +1,7 @@
-import { presetUno, transformerCompileClass, transformerDirectives, transformerVariantGroup } from "unocss";
-
 import type { Plugin } from "vite";
-import UnoCSS from "unocss/vite";
+import UnoCSS from "@unocss/svelte-scoped/vite";
 import { defineConfig } from "vite";
 import { enhancedImages } from "@sveltejs/enhanced-img";
-import extractorSvelte from "@unocss/extractor-svelte";
-import { presetScrollbar } from "unocss-preset-scrollbar";
 import { sveltekit } from "@sveltejs/kit/vite";
 import topLevelAwaitPlugin from "vite-plugin-top-level-await";
 import wasm from "vite-plugin-wasm";
@@ -33,17 +29,7 @@ export default defineConfig({
     topLevelAwaitPlugin(),
     enhancedImages(),
     UnoCSS({
-      presets: [presetUno(), presetScrollbar()],
-      extractors: [extractorSvelte()],
-      transformers: [
-        transformerVariantGroup(),
-        transformerDirectives(),
-        transformerCompileClass({
-          classPrefix: "supercss-",
-        }),
-      ],
-      safelist: ["ml-auto"],
-      details: true,
+      injectReset: "@unocss/reset/tailwind.css",
     }),
     wasm(),
     wasmFunnies(),
