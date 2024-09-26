@@ -1,6 +1,10 @@
 # Game
 
-![Knucklebones Game Screenshot](./public/og/og.png)
+![Knucklebones Game Screenshot](./static/og/og.png)
+
+## Todo:
+
+- Improve models/dialog UI
 
 ## Turn servers
 

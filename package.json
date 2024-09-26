@@ -23,9 +23,7 @@
     "@unocss/svelte-scoped": "^0.62.4",
     "@unocss/transformer-variant-group": "^0.62.4",
     "err-code": "^3.0.1",
-    "puppeteer-core": "^23.4.0",
     "svelte": "5.0.0-next.259",
-    "svelte-check": "^4.0.0",
     "typescript": "^5.6.2",
     "uint8-util": "^2.2.5",
     "unocss": "^0.62.4",
@@ -34,12 +32,11 @@
     "vite-plugin-top-level-await": "^1.4.4",
     "vite-plugin-wasm": "^3.3.0"
   },
-  "overrides": {
-    "@sveltejs/vite-plugin-svelte": "^4.0.0-next.6"
-  },
   "devDependencies": {
     "prettier": "^3.3.3",
-    "prettier-plugin-svelte": "^3.2.6"
+    "prettier-plugin-svelte": "^3.2.6",
+    "svelte-check": "^4.0.0",
+    "puppeteer-core": "^23.4.0"
   },
   "prettier": {
     "plugins": [

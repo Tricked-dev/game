@@ -300,10 +300,8 @@
     };
 
     peerConnection.on("connect", () => {
+      ws.close();
       console.log("Connected to peer");
-      setTimeout(() => {
-        // ws.close();
-      }, 1000);
       status = undefined;
       peerConnection._channel.onmessage = onMessage;
       peerConnection._channel.onclose = onChannelClose;
@@ -471,13 +469,13 @@
 
 <dialog bind:this={dialog} class="bg-transparent text-white">
   <div class="flex flex-col h-[50rem] w-[25rem] max-w-full">
-    <enhanced:img src="$assets/ending-base.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}" />
+    <enhanced:img src="$assets/ending-base.png" alt="" class="absolute left-0 top-0 h-full w-full" />
     {#if gameState?.winner.winner}
-      <enhanced:img src="$assets/ending-win.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}" />
+      <enhanced:img src="$assets/ending-win.png" alt="" class="absolute left-0 top-0 h-full w-full" />
     {:else if gameState?.winner?.win_by_tie}
-      <enhanced:img src="$assets/ending-draw.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}" />
+      <enhanced:img src="$assets/ending-draw.png" alt="" class="absolute left-0 top-0 h-full w-full" />
     {:else}
-      <enhanced:img src="$assets/ending-lose.png" alt="" class="absolute left-0 top-0 h-full w-full aspect-[2/5}" />
+      <enhanced:img src="$assets/ending-lose.png" alt="" class="absolute left-0 top-0 h-full w-full" />
     {/if}
     <div class="w-full h-full z-10 absolute left-0 top-0 flex flex-col justify-center items-center">
       <div class="ml-4 absolute left-0 top-48 text-5xl flex text-nowrap">

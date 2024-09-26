@@ -15,7 +15,7 @@ function wasmFunnies(): Plugin {
         return {
           resolve: {
             alias: {
-              "./lib/wasmdev/": "./lib/wasmprd/",
+              $wasm: "./lib/wasmprd/",
             },
           },
         };

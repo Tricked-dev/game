@@ -47,7 +47,8 @@ const config = {
     }),
     alias: {
       $assets: "./src/assets",
-      $src: "./src"
+      $src: "./src",
+      $wasm: "./src/lib/wasmdev/",
     },
     // prerender: {
     //   crawl: true,
