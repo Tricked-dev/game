@@ -17,11 +17,31 @@ jobs:
     - uses: oven-sh/setup-bun@v2
       with:
         bun-version: latest
+
+    # Cache Bun dependencies
+    - name: Cache Bun dependencies
+      uses: actions/cache@v2
+      with:
+        path: ~/.bun
+        key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+        restore-keys: |
+          ${{ runner.os }}-bun-
+
     - name: Setup Rust
       uses: actions-rs/toolchain@v1
       with:
         toolchain: nightly
         override: true
+
+    # Cache cargo dependencies
+    - name: Cache cargo registry
+      uses: actions/cache@v2
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-registry-
+
     - name: Bwah Bwah Bwahhh
       run: |
           rustup target add wasm32-unknown-unknown
@@ -50,11 +70,13 @@ jobs:
         cargo --version
         wasm-bindgen --version
         wasm-opt --version
+
     - name: build shit
       run: |
         bun i
         bash build.sh
         cargo build --release
+
     - name: Publish to Cloudflare Pages
       if: github.ref == 'refs/heads/master'
       uses: cloudflare/pages-action@v1
@@ -65,6 +87,7 @@ jobs:
         directory: build
         gitHubToken: ${{ secrets.GITHUB_TOKEN }}
         wranglerVersion: '3'
+
     - name: Build And publish docker image to ghcr
       if: github.ref == 'refs/heads/master'
       uses: docker/build-push-action@v3
