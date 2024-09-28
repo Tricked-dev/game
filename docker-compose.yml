@@ -1,4 +1,25 @@
 services:
+  timescaledb:
+    image: timescale/timescaledb-ha:pg16
+    container_name: timescaledb
+    restart: unless-stopped
+    environment:
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - timescaledb-data:/home/postgres/pgdata:rw
+
   game:
-    build: .
-  
+    image: ghcr.io/tricked-dev/knucklebones:latest
+    container_name: game
+    ports:
+      - "8083:8083"
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - DATABASE_STRINGLIKE=host=timescaledb user=postgres password=postgres
+      - RUST_LOG=knuckle_core=debug,info
+    depends_on:
+     - timescaledb
+
+volumes:
+  timescaledb-data:
