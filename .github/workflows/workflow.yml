@@ -1,0 +1,48 @@
+name: CI
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+
+    - uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: latest
+    - name: Setup Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+        override: true
+
+    - name: Install wasm-bindgen
+      run: |
+        wget https://github.com/rustwasm/wasm-bindgen/releases/download/0.2.93/wasm-bindgen-0.2.93-x86_64-unknown-linux-musl.tar.gz
+        tar -xvzf wasm-bindgen-0.2.93-x86_64-unknown-linux-musl.tar.gz
+        sudo cp wasm-bindgen-0.2.93-x86_64-unknown-linux-musl/wasm-bindgen /usr/local/bin/
+        sudo cp wasm-bindgen-0.2.93-x86_64-unknown-linux-musl/wasm-bindgen-test-runner /usr/local/bin/
+
+    # Install wasm-opt
+    - uses: Aandreba/setup-binaryen
+      with:
+        version: 119
+    - name: Verify installation
+      run: |
+        bun --version
+        cargo --version
+        wasm-bindgen --version
+        wasm-opt --version
+    - name: build shit
+      run: |
+        bun i
+        bash build.sh
+    - name: Build And publish docker image to ghcr
+      uses: docker/build-push-action@v3
+      with:
+        context: .
+        push: true
+        tags: ghcr.io/tricked/knucklebones-core:latest

@@ -140,6 +140,8 @@ struct Args {
     turn_token_id: Option<String>,
     #[clap(long, env = "API_TOKEN")]
     api_token: Option<String>,
+    #[clap(long, env = "SEED_FILE")]
+    seed_file: Option<String>,
 }
 
 #[tokio::main]
@@ -177,12 +179,14 @@ async fn main() {
 
     init_db(pool.get_owned().await.unwrap()).await.unwrap();
 
-    let dice_seed_signing_keys = match fs::read("server_seed").await {
+    let seed_file = args.seed_file.unwrap_or("server_seed".to_string());
+
+    let dice_seed_signing_keys = match fs::read(&seed_file).await {
         Ok(data) => SigningKey::from_bytes(&data.try_into().unwrap()),
         Err(_) => {
             let mut csprng = OsRng;
             let priv_key = SigningKey::generate(&mut csprng);
-            fs::write("server_seed", priv_key.to_bytes()).await.unwrap();
+            fs::write(seed_file, priv_key.to_bytes()).await.unwrap();
             priv_key
         }
     };

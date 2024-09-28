@@ -11,15 +11,23 @@ function wasmFunnies(): Plugin {
     name: "wasm-funnies",
     config: (userConfig, { mode }) => {
       // Check if the environment is production
-      if (mode === "production") {
-        return {
-          resolve: {
-            alias: {
-              $wasm: "./lib/wasmprd/",
-            },
-          },
-        };
-      }
+      // if (mode === "production") {
+      //   return {
+      //     resolve: {
+      //       alias: {
+      //         $wasm: "./wasmprd/",
+      //       },
+      //     },
+      //   };
+      // } else {
+      //   return {
+      //     resolve: {
+      //       alias: {
+      //         $wasm: "./wasmdev/",
+      //       },
+      //     },
+      //   };
+      // }
     },
   };
 }

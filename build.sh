@@ -10,5 +10,4 @@ wasm-bindgen ./target/wasm32-unknown-unknown/release-wasm/lib_knuckle.wasm --tar
 wasm-opt -Oz --optimize-for-js -o ./src/lib/wasmprd/lib_knuckle_bg.wasm ./src/lib/wasmprd/lib_knuckle_bg.wasm
 
 
-cd que && docker-compose up -d && cd ..
-pnpm build
+bun build

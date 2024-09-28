@@ -889,6 +889,42 @@ dependencies = [
 ]
 
 [[package]]
+name = "knuckle_core"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "axum_thiserror",
+ "base64 0.22.1",
+ "bb8",
+ "bb8-postgres",
+ "clap",
+ "dotenv_rs",
+ "ed25519-dalek",
+ "futures",
+ "getrandom",
+ "http",
+ "lib_knuckle",
+ "mime_guess",
+ "parking_lot",
+ "rand_core",
+ "reqwest",
+ "rust-embed",
+ "scc",
+ "serde",
+ "serde_json",
+ "strum",
+ "strum_macros",
+ "thiserror",
+ "tokio",
+ "tokio-postgres",
+ "tower-http",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1198,42 +1234,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5e719e8df665df0d1c8fbfd238015744736151d4445ec0836b8e628aae103b77"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "que"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "axum",
- "axum_thiserror",
- "base64 0.22.1",
- "bb8",
- "bb8-postgres",
- "clap",
- "dotenv_rs",
- "ed25519-dalek",
- "futures",
- "getrandom",
- "http",
- "lib_knuckle",
- "mime_guess",
- "parking_lot",
- "rand_core",
- "reqwest",
- "rust-embed",
- "scc",
- "serde",
- "serde_json",
- "strum",
- "strum_macros",
- "thiserror",
- "tokio",
- "tokio-postgres",
- "tower-http",
- "tracing",
- "tracing-subscriber",
- "uuid",
 ]
 
 [[package]]

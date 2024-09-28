@@ -20,9 +20,9 @@ const config = {
       transformers: [
         transformerVariantGroup(),
         transformerDirectives(),
-        transformerCompileClass({
-          classPrefix: "supercss-",
-        }),
+        // transformerCompileClass({
+        //   classPrefix: "supercss-",
+        // }),
       ],
       safelist: [
         "ml-auto",
@@ -41,20 +41,12 @@ const config = {
   ],
 
   kit: {
-    adapter: adapter({
-      // fallback: "200.html",
-      // precompress: false,
-    }),
+    adapter: adapter(),
     alias: {
       $assets: "./src/assets",
       $src: "./src",
       $wasm: "./src/lib/wasmdev/",
     },
-    // prerender: {
-    //   crawl: true,
-    //   entries: ["*"],
-    //   origin: "https://knucklebones.fyi",
-    // }
   },
   compilerOptions: {
     warningFilter: () => false

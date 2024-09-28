@@ -14,7 +14,6 @@
   import Peer, { type PeerSignalData } from "$src/lib/peer/lite";
   import Dice from "$lib/components/Dice.svelte";
   import nameImg from "$assets/name.png?url";
-  console.log(nameImg);
 
   const boardSize = {
     width: 3,
