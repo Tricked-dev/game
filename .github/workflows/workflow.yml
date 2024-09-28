@@ -77,6 +77,14 @@ jobs:
         bash build.sh
         cargo build --release
 
+    - name: Build And publish docker image to ghcr
+      if: github.ref == 'refs/heads/master'
+      uses: docker/build-push-action@v3
+      with:
+        context: .
+        push: true
+        tags: ghcr.io/tricked-dev/knucklebones:latest
+        
     - name: Publish to Cloudflare Pages
       if: github.ref == 'refs/heads/master'
       uses: cloudflare/pages-action@v1
@@ -88,11 +96,5 @@ jobs:
         gitHubToken: ${{ secrets.GITHUB_TOKEN }}
         wranglerVersion: '3'
 
-    - name: Build And publish docker image to ghcr
-      if: github.ref == 'refs/heads/master'
-      uses: docker/build-push-action@v3
-      with:
-        context: .
-        push: true
-        tags: ghcr.io/tricked-dev/knucklebones:latest
+
 
