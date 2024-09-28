@@ -79,12 +79,13 @@ jobs:
 
     - name: Build And publish docker image to ghcr
       if: github.ref == 'refs/heads/master'
-      uses: docker/build-push-action@v3
+      uses: docker/build-push-action@v5
       with:
         context: .
         push: true
-        tags: ghcr.io/tricked-dev/knucklebones:latest
-        
+        tags: ghcr.io/Tricked-dev/knucklebones:latest
+        secrets: |
+          GITHUB_TOKEN
     - name: Publish to Cloudflare Pages
       if: github.ref == 'refs/heads/master'
       uses: cloudflare/pages-action@v1
