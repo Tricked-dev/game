@@ -27,9 +27,11 @@ jobs:
         sudo cp wasm-bindgen-0.2.93-x86_64-unknown-linux-musl/wasm-bindgen-test-runner /usr/local/bin/
 
     # Install wasm-opt
-    - uses: Aandreba/setup-binaryen@v1.0.0
-      with:
-        version: 119
+    - name: Install wasm-opt
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y binaryen
+
     - name: Verify installation
       run: |
         bun --version
