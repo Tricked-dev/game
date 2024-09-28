@@ -19,7 +19,7 @@
     width: 3,
     height: 3,
   };
-  let backendUrl = import.meta.env.DEV ? "http://localhost:8083" : "";
+  let backendUrl = import.meta.env.DEV ? "http://localhost:8083" : "https://api.knucklebones.fyi";
 
   let game: Game;
   let gameInfo: Partial<GameBody> & { initiator: boolean } & {
