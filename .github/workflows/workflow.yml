@@ -51,13 +51,6 @@ jobs:
         bun i
         bash build.sh
         cargo build --release
-    - name: Build And publish docker image to ghcr
-      uses: docker/build-push-action@v3
-      with:
-        context: .
-        push: true
-        tags: ghcr.io/tricked/knucklebones-core:latest
-
     - name: Publish to Cloudflare Pages
       uses: cloudflare/pages-action@v1
       with:
@@ -67,3 +60,10 @@ jobs:
         directory: build
         gitHubToken: ${{ secrets.GITHUB_TOKEN }}
         wranglerVersion: '3'
+    - name: Build And publish docker image to ghcr
+      uses: docker/build-push-action@v3
+      with:
+        context: .
+        push: true
+        tags: ghcr.io/tricked/knucklebones:latest
+
