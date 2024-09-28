@@ -101,7 +101,7 @@ jobs:
         projectName: knucklebone
         directory: build
         branch: main
-        gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+        # gitHubToken: ${{ secrets.GITHUB_TOKEN }}
         wranglerVersion: '3'
 
 
