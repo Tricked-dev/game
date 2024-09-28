@@ -67,5 +67,5 @@ jobs:
       with:
         context: .
         push: true
-        tags: ghcr.io/tricked-dev/knucklebones-core:latest
+        tags: ghcr.io/tricked-dev/knucklebones:latest
 
