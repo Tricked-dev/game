@@ -76,14 +76,20 @@ jobs:
         bun i
         bash build.sh
         cargo build --release
-
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
     - name: Build And publish docker image to ghcr
       if: github.ref == 'refs/heads/master'
       uses: docker/build-push-action@v5
       with:
         context: .
         push: true
-        tags: ghcr.io/tricked-dev/knucklebones:latest
+        tags: |
+          ghcr.io/tricked-dev/knucklebones:latest
         secrets: |
           GITHUB_TOKEN
     - name: Publish to Cloudflare Pages
