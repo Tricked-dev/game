@@ -18,6 +18,17 @@ jobs:
       with:
         toolchain: nightly
         override: true
+    - name: Add wasm target
+      run: rustup target add wasm32-unknown-unknown
+
+    - name: Add wasm core std target
+      run: rustup target add wasm32-wasi
+
+    - name: Add x86 target
+      run: rustup target add i686-unknown-linux-gnu
+
+    - name: Install rust-std component for wasm targets
+      run: rustup component add rust-std --target wasm32-unknown-unknown
 
     - name: Install wasm-bindgen
       run: |
