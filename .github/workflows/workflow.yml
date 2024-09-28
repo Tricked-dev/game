@@ -83,7 +83,7 @@ jobs:
       with:
         context: .
         push: true
-        tags: ghcr.io/Tricked-dev/knucklebones:latest
+        tags: ghcr.io/tricked-dev/knucklebones:latest
         secrets: |
           GITHUB_TOKEN
     - name: Publish to Cloudflare Pages
