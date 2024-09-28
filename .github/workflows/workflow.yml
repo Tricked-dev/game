@@ -100,6 +100,7 @@ jobs:
         accountId: 3dd81dce86015003355892e51e89be8d
         projectName: knucklebone
         directory: build
+        branch: main
         gitHubToken: ${{ secrets.GITHUB_TOKEN }}
         wranglerVersion: '3'
 
