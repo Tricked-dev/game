@@ -50,6 +50,7 @@ jobs:
       run: |
         bun i
         bash build.sh
+        cargo build --release
     - name: Build And publish docker image to ghcr
       uses: docker/build-push-action@v3
       with:

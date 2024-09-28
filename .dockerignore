@@ -3,3 +3,4 @@
 ./dist
 ./.svelte-kit
 ./.vscode
+!./target/release/knuckle_core
