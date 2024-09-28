@@ -114,7 +114,7 @@
     if (import.meta.env.DEV) {
       ws = new WebSocket("ws://localhost:8083/ws");
     } else {
-      ws = new WebSocket(`${window.origin.replace("http", "ws")}/ws`);
+      ws = new WebSocket(`${backendUrl}/ws`);
     }
 
     ws.onopen = () => {};

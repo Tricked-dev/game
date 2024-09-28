@@ -1,3 +1,5 @@
+version: '3.8'
+
 services:
   timescaledb:
     image: timescale/timescaledb-ha:pg16
@@ -19,7 +21,18 @@ services:
       - DATABASE_STRINGLIKE=host=timescaledb user=postgres password=postgres
       - RUST_LOG=knuckle_core=debug,info
     depends_on:
-     - timescaledb
+      - timescaledb
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    environment:
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_POLL_INTERVAL=300
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 300 game
 
 volumes:
   timescaledb-data:
