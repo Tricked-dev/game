@@ -57,3 +57,13 @@ jobs:
         context: .
         push: true
         tags: ghcr.io/tricked/knucklebones-core:latest
+
+    - name: Publish to Cloudflare Pages
+      uses: cloudflare/pages-action@v1
+      with:
+        apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        accountId: 3dd81dce86015003355892e51e89be8d
+        projectName: knucklebone
+        directory: build
+        gitHubToken: ${{ secrets.GITHUB_TOKEN }}
+        wranglerVersion: '3'
