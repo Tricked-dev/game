@@ -15,6 +15,8 @@
   import Dice from "$lib/components/Dice.svelte";
   import nameImg from "$assets/name.png?url";
 
+  globalThis.random_uuid = random_uuid;
+
   const boardSize = {
     width: 3,
     height: 3,

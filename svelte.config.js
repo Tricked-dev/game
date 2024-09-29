@@ -45,7 +45,7 @@ const config = {
     alias: {
       $assets: "./src/assets",
       $src: "./src",
-      $wasm: "./src/lib/wasmdev/",
+      $wasm: prod ? "./src/lib/wasmprd" : "./src/lib/wasmdev",
     },
   },
   compilerOptions: {

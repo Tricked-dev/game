@@ -12,6 +12,7 @@ declare global {
     // interface Platform {}
   }
   var game: Game;
+  var random_uuid: () => string;
 }
 
 export {};
