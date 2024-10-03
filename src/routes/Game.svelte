@@ -452,14 +452,14 @@
         event.dataTransfer!.dropEffect = "copy";
       }}
     >
-      <enhanced:img src="$assets/dice-bg.png" alt="" class="absolute left-0 top-0 h-full w-full" />
+      <enhanced:img sizes="min(1280px, 100vw)"src="$assets/dice-bg.png" alt="" class="absolute left-0 top-0 h-full w-full" />
       <Dice number={row} {occurrences}></Dice>
     </button>
   {/each}
   {#each points ?? [] as row}
     <div class="flex justify-center">
       <div class="md:size-20 size-12 flex justify-center text-white text-center text-3xl relative">
-        <enhanced:img src="$assets/number-base.png" alt="" class="absolute left-0 top-0 h-full w-full"> </enhanced:img>
+        <enhanced:img sizes="min(1280px, 100vw)"src="$assets/number-base.png" alt="" class="absolute left-0 top-0 h-full w-full"> </enhanced:img>
         <div class="absolute top-[50%] left-[50%] translate-x-[-50%] translate-y-[-50%]">
           {row}
         </div>
@@ -470,29 +470,29 @@
 
 <dialog bind:this={dialog} class="bg-transparent text-white">
   <div class="flex flex-col h-[50rem] w-[25rem] max-w-full">
-    <enhanced:img src="$assets/ending-base.png" alt="" class="absolute left-0 top-0 h-full w-full" />
+    <enhanced:img sizes="min(1280px, 100vw)"src="$assets/ending-base.png" alt="" class="absolute left-0 top-0 h-full w-full" />
     {#if gameState?.winner.winner}
-      <enhanced:img src="$assets/ending-win.png" alt="" class="absolute left-0 top-0 h-full w-full" />
+      <enhanced:img sizes="min(1280px, 100vw)"src="$assets/ending-win.png" alt="" class="absolute left-0 top-0 h-full w-full" />
     {:else if gameState?.winner?.win_by_tie}
-      <enhanced:img src="$assets/ending-draw.png" alt="" class="absolute left-0 top-0 h-full w-full" />
+      <enhanced:img sizes="min(1280px, 100vw)"src="$assets/ending-draw.png" alt="" class="absolute left-0 top-0 h-full w-full" />
     {:else}
-      <enhanced:img src="$assets/ending-lose.png" alt="" class="absolute left-0 top-0 h-full w-full" />
+      <enhanced:img sizes="min(1280px, 100vw)"src="$assets/ending-lose.png" alt="" class="absolute left-0 top-0 h-full w-full" />
     {/if}
     <div class="w-full h-full z-10 absolute left-0 top-0 flex flex-col justify-center items-center">
       <div class="ml-4 absolute left-0 top-48 text-5xl flex text-nowrap">
-        <enhanced:img src="$assets/end-texts-your.png" class="h-10" alt="" />: {gameState?.points?.me?.reduce(
+        <enhanced:img sizes="min(1280px, 100vw)"src="$assets/end-texts-your.png" class="h-10" alt="" />: {gameState?.points?.me?.reduce(
           (a, b) => a + b,
           0,
         )}
       </div>
       <div class="ml-4 absolute left-0 top-60 text-5xl flex text-nowrap">
-        <enhanced:img src="$assets/end-texts-opponent.png" alt="" class="h-10" />: {gameState?.points?.other?.reduce(
+        <enhanced:img sizes="min(1280px, 100vw)"src="$assets/end-texts-opponent.png" alt="" class="h-10" />: {gameState?.points?.other?.reduce(
           (a, b) => a + b,
           0,
         )}
       </div>
       <div class="ml-4 absolute left-0 top-72 text-5xl flex text-nowrap">
-        <enhanced:img src="$assets/end-texts-total.png" class="h-10" alt="" />: {gameState?.seq}
+        <enhanced:img sizes="min(1280px, 100vw)"src="$assets/end-texts-total.png" class="h-10" alt="" />: {gameState?.seq}
       </div>
       <button
         class="mt-auto mx-auto mb-10"
@@ -501,7 +501,7 @@
           dialog.close();
         }}
       >
-        <enhanced:img src="$assets/start-again.png" alt="" class="hover:brightness-110" />
+        <enhanced:img sizes="min(1280px, 100vw)"src="$assets/start-again.png" alt="" class="hover:brightness-110" />
       </button>
     </div>
   </div>
@@ -520,7 +520,7 @@
 <dialog bind:this={waitingDialog} class="bg-transparent text-white outline-none">
   <div class="flex flex-col z-50 min-w-60 min-h-20 bg-blue-300 text-center p-4 text-3xl">
     Waiting for a opponent to join.
-    <enhanced:img src="$assets/waiting.png" alt="" class="mx-auto h-24 w-auto" />
+    <enhanced:img sizes="min(1280px, 100vw)"src="$assets/waiting.png" alt="" class="mx-auto h-24 w-auto" />
     {#if queueId}
       Queue <a href="{location.origin}/#{queueId}" onclick={() => window.navigator.clipboard.writeText(queueId ?? "")}
         >{queueId}</a
@@ -534,7 +534,7 @@
 </dialog>
 
 <dialog bind:this={userDialog} class=" bg-transparent text-white outline-none w-[40rem] h-[70rem]">
-  <enhanced:img src="$assets/options.png" alt="" class=" absolute left-0 top-0 h-full w-full aspect-[2/5]" />
+  <enhanced:img sizes="min(1280px, 100vw)"src="$assets/options.png" alt="" class=" absolute left-0 top-0 h-full w-full aspect-[2/5]" />
 
   <div class=" absolute px-16 flex flex-col h-full w-full pt-60 pb-10">
     <label class="text-5xl">
@@ -595,7 +595,7 @@
         }
       }}
     >
-      <enhanced:img src="$assets/save.png" alt="" class="brightness-125 hover:brightness-110 w-72" />
+      <enhanced:img sizes="min(1280px, 100vw)"src="$assets/save.png" alt="" class="brightness-125 hover:brightness-110 w-72" />
     </button>
   </div>
   <button
@@ -604,7 +604,7 @@
       userDialog.close();
     }}
   >
-    <enhanced:img src="$assets/close.png" alt="" class=" size-12 hover:brightness-110 rounded-xl" />
+    <enhanced:img sizes="min(1280px, 100vw)"src="$assets/close.png" alt="" class=" size-12 hover:brightness-110 rounded-xl" />
   </button>
 </dialog>
 
@@ -646,8 +646,8 @@
     <div class="ml-auto flex mb-auto">
       <div class="flex flex-col mb-auto">
         <div class="">
-          <enhanced:img src="$assets/turns-your.png" alt="" style:display={gameState?.your_turn ? "block" : "none"} />
-          <enhanced:img src="$assets/turns-other.png" alt="" style:display={!gameState?.your_turn ? "block" : "none"} />
+          <enhanced:img sizes="min(1280px, 100vw)"src="$assets/turns-your.png" alt="" style:display={gameState?.your_turn ? "block" : "none"} />
+          <enhanced:img sizes="min(1280px, 100vw)"src="$assets/turns-other.png" alt="" style:display={!gameState?.your_turn ? "block" : "none"} />
 
           <button
             class="mx-auto mb-10 my-4"
@@ -658,7 +658,7 @@
               gameState = game.w_get_board_data();
             }}
           >
-            <enhanced:img src="$assets/turns-forfeit.png" alt="" class="hover:brightness-110" />
+            <enhanced:img sizes="min(1280px, 100vw)"src="$assets/turns-forfeit.png" alt="" class="hover:brightness-110" />
           </button>
         </div>
         {#each [1, 2, 3, 4, 5, 6] as i}
@@ -713,7 +713,7 @@
 {:else}
   <div class="w-full h-full flex justify-center items-center relative rounded-xl text-white">
     <div class=" h-[40rem] w-[20rem] relative">
-      <enhanced:img src="$assets/start-bg.png" alt="" class="absolute left-0 top-0 h-full w-full rounded-xl" />
+      <enhanced:img sizes="min(1280px, 100vw)"src="$assets/start-bg.png" alt="" class="absolute left-0 top-0 h-full w-full rounded-xl" />
       <div class=" absolute left-0 top-0 h-full w-full flex flex-col justify-center items-center p-4">
         <span class=" text-4xl text-center font-semibold">KnuckleBones</span>
         <a class=" text-center" href="https://tricked.dev">By Tricked</a>
@@ -749,7 +749,7 @@
         {/if}
 
         <button onclick={startChat} class=" mt-auto hover:brightness-110">
-          <enhanced:img src="$assets/start-btn.png" class="h-24 w-50" alt="" />
+          <enhanced:img sizes="min(1280px, 100vw)"src="$assets/start-btn.png" class="h-24 w-50" alt="" />
         </button>
         <div class="flex justify-center gap-2">
           <button
@@ -760,8 +760,8 @@
               else startChat();
             }}
           >
-            <enhanced:img src="$assets/private-btns-bg.png" class="w-full h-full absolute left-0 top-0" />
-            <enhanced:img src="$assets/private-btns-join.png" class="w-full h-full absolute left-0 top-0" />
+            <enhanced:img sizes="min(1280px, 100vw)"src="$assets/private-btns-bg.png" class="w-full h-full absolute left-0 top-0" />
+            <enhanced:img sizes="min(1280px, 100vw)"src="$assets/private-btns-join.png" class="w-full h-full absolute left-0 top-0" />
           </button>
           <button
             class="h-16 w-30 relative hover:brightness-110"
@@ -770,8 +770,8 @@
               startChat();
             }}
           >
-            <enhanced:img src="$assets/private-btns-bg.png" class="w-full h-full absolute left-0 top-0" />
-            <enhanced:img src="$assets/private-btns-start.png" class="w-full h-full absolute left-0 top-0" />
+            <enhanced:img sizes="min(1280px, 100vw)"src="$assets/private-btns-bg.png" class="w-full h-full absolute left-0 top-0" />
+            <enhanced:img sizes="min(1280px, 100vw)"src="$assets/private-btns-start.png" class="w-full h-full absolute left-0 top-0" />
           </button>
         </div>
       </div>
@@ -783,7 +783,7 @@
       userDialog.showModal();
     }}
   >
-    <enhanced:img class="size-16" src="$assets/user.png" />
+    <enhanced:img sizes="min(1280px, 100vw)"class="size-16" src="$assets/user.png" />
   </button>
 {/if}
 
@@ -809,7 +809,7 @@
       </div>
     </div>
     <span class="flex justify-center text-8xl text-center w-full gap-2">
-      <enhanced:img src="$assets/end-texts-your.png" />
+      <enhanced:img sizes="min(1280px, 100vw)"src="$assets/end-texts-your.png" />
       <span class="text-8xl text-center w-full">0</span>
     </span>
   </noscript>
