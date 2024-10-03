@@ -20,3 +20,7 @@ p-4 {
   font-family: "Thaleah";
   src: url("/fonts/ThaleahFat.ttf");
 }
+
+img {
+  image-rendering: pixelated;
+}
